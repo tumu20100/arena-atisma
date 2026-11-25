@@ -8,10 +8,13 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const S = require('./public/shared.js');
 
 const PORT = Number(process.env.PORT) || 3000;
-const PUBLIC = path.join(__dirname, 'public');
+// Fayllar ya "public" qovluğundadır, ya da (GitHub-a qovluqsuz yüklənibsə) birbaşa kökdədir.
+const PUBLIC = fs.existsSync(path.join(__dirname, 'public', 'shared.js')) ? path.join(__dirname, 'public') : __dirname;
+const FLAT = PUBLIC === __dirname;
+const FLAT_FILES = new Set(['index.html', 'client.js', 'shared.js']);
+const S = require(path.join(PUBLIC, 'shared.js'));
 const TICK = 50; // 20 Hz
 const MAX_PLAYERS = 12;
 const FFA_KILLS = 20;
@@ -38,6 +41,7 @@ const server = http.createServer((req, res) => {
   if (p === '/') p = '/index.html';
   const file = path.join(PUBLIC, path.normalize(p));
   if (!file.startsWith(PUBLIC + path.sep)) { res.writeHead(403); return res.end(); }
+  if (FLAT && (path.dirname(file) !== PUBLIC || !FLAT_FILES.has(path.basename(file)))) { res.writeHead(404); return res.end('404'); }
   fs.readFile(file, (err, data) => {
     if (err) { res.writeHead(404); return res.end('404'); }
     res.writeHead(200, {
