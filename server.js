@@ -192,7 +192,7 @@ class Room {
       id: this.nextId++, conn, name, bot: false, team: null,
       x: 0, y: 0, z: 0, yaw: 0, pitch: 0, hp: 100, alive: false,
       kills: 0, deaths: 0, wi: 0, seq: 0, lastFire: {}, lastState: Date.now(),
-      lastHurt: 0, respawnAt: 0
+      lastHurt: 0, respawnAt: 0, crouch: false, helmet: S.HELMET_HP, armor: S.ARMOR_HP
     };
     if (this.mode === 'tdm') {
       let red = 0, blue = 0;
@@ -247,10 +247,11 @@ class Room {
     const sp = this.pickSpawn();
     p.x = sp[0]; p.z = sp[1]; p.y = 0;
     p.hp = 100; p.alive = true; p.respawnAt = 0;
+    p.helmet = S.HELMET_HP; p.armor = S.ARMOR_HP; p.crouch = false;
     p.seq++; p.lastState = Date.now();
     const yaw = Math.atan2(p.x, p.z);
     p.yaw = yaw; p.pitch = 0;
-    p.conn.send({ t: 'spawn', x: p.x, y: p.y, z: p.z, yaw, seq: p.seq });
+    p.conn.send({ t: 'spawn', x: p.x, y: p.y, z: p.z, yaw, seq: p.seq, helmet: p.helmet, armor: p.armor });
   }
 
   reset() {
@@ -288,7 +289,7 @@ class Room {
     if (len < 1e-6) return;
     dx /= len; dy /= len; dz /= len;
 
-    const ox = p.x, oy = p.y + S.EYE, oz = p.z;
+    const ox = p.x, oy = p.y + (p.crouch ? S.CROUCH_EYE : S.EYE), oz = p.z;
     // sapma üçün perpendikulyar oxlar
     let ux, uy, uz;
     if (Math.abs(dy) < 0.99) { ux = dz; uy = 0; uz = -dx; } else { ux = 1; uy = 0; uz = 0; }
@@ -308,32 +309,46 @@ class Room {
       let tMax = S.castWorld(ox, oy, oz, rx, ry, rz, w.range);
       let best = null, bestT = tMax;
       for (const e of targets) {
-        const t = S.rayCyl(ox, oy, oz, rx, ry, rz, e.x, e.z, e.y, e.y + S.HEIGHT, 0.45);
+        const t = S.rayCyl(ox, oy, oz, rx, ry, rz, e.x, e.z, e.y, e.y + (e.crouch ? S.CROUCH_HEIGHT : S.HEIGHT), 0.45);
         if (t !== null && t < bestT) { bestT = t; best = e; }
       }
       if (best) {
         const hy = oy + ry * bestT;
-        const head = hy > best.y + 1.45;
+        const headLine = best.y + (best.crouch ? S.CROUCH_HEIGHT - 0.35 : S.HEIGHT - 0.35);
+        const head = hy > headLine;
         const half = w.range * 0.5;
         const fall = bestT <= half ? 1 : Math.max(0.6, 1 - 0.4 * ((bestT - half) / half));
-        const dmg = w.dmg * fall * (head ? 2 : 1);
-        const h = hits.get(best) || { dmg: 0, head: false };
+        let dmg = w.dmg * fall * (head ? 2 : 1);
+        const h = hits.get(best) || { dmg: 0, head: false, helm: false };
+        if (head && !best.bot && best.helmet > 0) {
+          // kask zədənin yarısını udur, dayanıqlığı bitənə qədər
+          const absorbed = Math.min(best.helmet, dmg * 0.5);
+          best.helmet -= absorbed;
+          dmg -= absorbed;
+          h.helm = true;
+        } else if (!head && !best.bot && best.armor > 0) {
+          // bədənlik bədənə dəyən zədənin yarısını udur
+          const absorbed = Math.min(best.armor, dmg * 0.5);
+          best.armor -= absorbed;
+          dmg -= absorbed;
+          h.helm = true;
+        }
         h.dmg += dmg; h.head = h.head || head;
         hits.set(best, h);
       }
       ends.push([r1(ox + rx * bestT), r1(oy + ry * bestT), r1(oz + rz * bestT)]);
     }
     this.broadcast({ t: 'shot', id: p.id, w: p.wi, o: [r2(ox), r2(oy), r2(oz)], e: ends });
-    for (const [victim, h] of hits) this.damage(victim, p, h.dmg, h.head, w.id);
+    for (const [victim, h] of hits) this.damage(victim, p, h.dmg, h.head, w.id, h.helm);
   }
 
-  damage(victim, attacker, amount, head, wid) {
+  damage(victim, attacker, amount, head, wid, helm) {
     if (!victim.alive) return;
     victim.hp -= amount;
     victim.lastHurt = Date.now();
     const dead = victim.hp <= 0;
-    if (attacker.conn) attacker.conn.send({ t: 'hit', dmg: Math.round(amount), head, kill: dead, v: victim.id });
-    if (victim.conn) victim.conn.send({ t: 'hurt', hp: Math.max(0, Math.round(victim.hp)), ax: attacker.x, az: attacker.z });
+    if (attacker.conn) attacker.conn.send({ t: 'hit', dmg: Math.round(amount), head, kill: dead, v: victim.id, helm: !!helm });
+    if (victim.conn) victim.conn.send({ t: 'hurt', hp: Math.max(0, Math.round(victim.hp)), hm: Math.round(victim.helmet), am: Math.round(victim.armor), ax: attacker.x, az: attacker.z });
     if (dead) this.kill(victim, attacker, head, wid);
   }
 
@@ -373,7 +388,7 @@ class Room {
     if (this.waveAt && now >= this.waveAt) {
       this.waveAt = 0;
       this.wave++;
-      for (const p of this.players.values()) if (!p.alive) this.spawn(p);
+      for (const p of this.players.values()) { if (!p.alive) this.spawn(p); else { p.helmet = S.HELMET_HP; p.armor = S.ARMOR_HP; } }
       const count = Math.min(30, 3 + this.wave * 2);
       for (let i = 0; i < count; i++) this.spawnBot();
       this.broadcast({ t: 'wave', n: this.wave, bots: count });
@@ -482,7 +497,7 @@ class Room {
 
     const arr = [];
     for (const p of this.players.values()) {
-      arr.push([p.id, r2(p.x), r2(p.y), r2(p.z), r2(p.yaw), r2(p.pitch), Math.round(p.hp), p.wi, p.alive ? 1 : 0]);
+      arr.push([p.id, r2(p.x), r2(p.y), r2(p.z), r2(p.yaw), r2(p.pitch), Math.round(p.hp), p.wi, (p.alive ? 1 : 0) | (p.crouch ? 4 : 0), Math.round(p.helmet), Math.round(p.armor)]);
     }
     for (const b of this.bots) {
       arr.push([b.id, r2(b.x), r2(b.y), r2(b.z), r2(b.yaw), 0, Math.round(b.hp), 1, 3]);
@@ -542,6 +557,7 @@ function onMessage(conn, raw) {
     if (isFinite(pitch)) p.pitch = S.clamp(pitch, -1.6, 1.6);
     const wi = m.wi | 0;
     if (wi >= 0 && wi < S.WEAPON_ORDER.length) p.wi = wi;
+    p.crouch = m.c === 1;
   } else if (m.t === 'shoot') {
     room.handleShoot(p, m);
   } else if (m.t === 'chat') {

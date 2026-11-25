@@ -9,6 +9,10 @@
   var EYE = 1.6;          // göz hündürlüyü
   var HEIGHT = 1.8;       // oyunçu hündürlüyü
   var RADIUS = 0.4;       // oyunçu dairəsinin radiusu
+  var CROUCH_EYE = 1.05;  // əyiləndə göz hündürlüyü
+  var CROUCH_HEIGHT = 1.25; // əyiləndə bədən hündürlüyü
+  var HELMET_HP = 50;     // kaskın dayanıqlığı
+  var ARMOR_HP = 60;      // bədənliyin dayanıqlığı
   var STEP = 0.5;         // pilləkən kimi çıxıla bilən maksimum hündürlük
 
   var WEAPONS = {
@@ -143,6 +147,7 @@
 
   return {
     HALF: HALF, EYE: EYE, HEIGHT: HEIGHT, RADIUS: RADIUS, STEP: STEP,
+    CROUCH_EYE: CROUCH_EYE, CROUCH_HEIGHT: CROUCH_HEIGHT, HELMET_HP: HELMET_HP, ARMOR_HP: ARMOR_HP,
     WEAPONS: WEAPONS, WEAPON_ORDER: WEAPON_ORDER, BOXES: BOXES, SPAWNS: SPAWNS,
     resolve: resolve, groundAt: groundAt, rayBox: rayBox, rayCyl: rayCyl, castWorld: castWorld, clamp: clamp
   };

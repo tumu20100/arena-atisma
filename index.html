@@ -2,7 +2,7 @@
 <html lang="az">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>Arena Atışma</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -117,6 +117,61 @@ button.go:active { transform: translateY(3px); box-shadow: 0 1px 0 #a86f00; }
 #pause h2 { margin: 0 0 6px; font-size: 30px; letter-spacing: .06em; text-transform: uppercase; }
 #pause p { margin: 0; color: var(--dim); }
 #loading { position: fixed; inset: 0; display: none; place-items: center; font-size: 22px; }
+
+#hud::before { content: ''; position: absolute; inset: 0; background: radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,.4) 100%); }
+#hitm.helm::before, #hitm.helm::after { background: #7fc4ff; }
+#helmbar { margin-top: 8px; font-size: 13px; letter-spacing: 0.12em; color: #9fd4ff; text-shadow: 0 2px 6px rgba(0,0,0,.6); }
+#helmbar .track { height: 6px; margin-top: 3px; background: rgba(0,0,0,.5); border: 1px solid var(--line); border-radius: 3px; overflow: hidden; }
+#helmfill { height: 100%; width: 100%; background: #7fc4ff; transition: width .15s; }
+#helmbar.gone { color: var(--red); }
+#armbar { margin-top: 6px; font-size: 13px; letter-spacing: 0.12em; color: #ffd27a; text-shadow: 0 2px 6px rgba(0,0,0,.6); }
+#armbar .track { height: 6px; margin-top: 3px; background: rgba(0,0,0,.5); border: 1px solid var(--line); border-radius: 3px; overflow: hidden; }
+#armfill { height: 100%; width: 100%; background: #ffb703; transition: width .15s; }
+#armbar.gone { color: var(--red); }
+#stance { position: absolute; left: 50%; bottom: 90px; transform: translateX(-50%); font-size: 18px; letter-spacing: 0.22em; color: var(--amber); text-shadow: 0 2px 6px rgba(0,0,0,.8); }
+#lobby { place-items: center start; padding-left: max(16px, 6vw); background: linear-gradient(90deg, rgba(10,14,18,.94) 0%, rgba(10,14,18,.72) 38%, rgba(10,14,18,.08) 100%); }
+@media (max-width: 760px) { #lobby { place-items: center; padding-left: 16px; background: rgba(10,14,18,.86); } }
+.chk { display: flex; gap: 8px; align-items: flex-start; margin: 14px 0 0; text-transform: none; letter-spacing: 0; font-size: 14px; line-height: 1.3; color: var(--dim); }
+.chk input { margin-top: 2px; accent-color: var(--amber); }
+
+/* telefon idarəetməsi */
+#tc { position: absolute; inset: 0; pointer-events: none; touch-action: none; }
+#tc > * { pointer-events: auto; touch-action: none; }
+#look { position: absolute; top: 0; bottom: 0; right: 0; width: 58%; z-index: 1; }
+#js { position: absolute; z-index: 2; left: max(26px, env(safe-area-inset-left, 0px)); bottom: max(26px, env(safe-area-inset-bottom, 0px)); width: 140px; height: 140px; border-radius: 50%; background: rgba(255,255,255,.08); border: 2px solid rgba(255,255,255,.28); }
+#jk { position: absolute; left: 42px; top: 42px; width: 56px; height: 56px; border-radius: 50%; background: rgba(255,255,255,.4); border: 2px solid rgba(255,255,255,.6); }
+.tb { position: absolute; z-index: 2; display: grid; place-items: center; width: 64px; height: 64px; border-radius: 50%; font: 700 12px var(--font); letter-spacing: .06em; color: var(--ink); background: rgba(12,18,22,.55); border: 2px solid rgba(255,255,255,.3); text-align: center; -webkit-tap-highlight-color: transparent; }
+.tb.on { background: rgba(255,183,3,.55); }
+.tb.active { background: rgba(255,183,3,.75); color: #161200; border-color: var(--amber); }
+.tb.big { width: 96px; height: 96px; font-size: 15px; background: rgba(239,71,111,.5); border-color: rgba(255,255,255,.55); right: max(30px, env(safe-area-inset-right, 0px)); bottom: max(36px, env(safe-area-inset-bottom, 0px)); }
+.tb.big.on { background: rgba(239,71,111,.85); }
+#tj { right: calc(max(30px, env(safe-area-inset-right, 0px)) + 112px); bottom: max(52px, env(safe-area-inset-bottom, 0px)); }
+#ta { right: calc(max(30px, env(safe-area-inset-right, 0px)) + 14px); bottom: calc(max(36px, env(safe-area-inset-bottom, 0px)) + 112px); }
+#tr { right: calc(max(30px, env(safe-area-inset-right, 0px)) + 90px); bottom: calc(max(36px, env(safe-area-inset-bottom, 0px)) + 96px); }
+#tcr { right: calc(max(30px, env(safe-area-inset-right, 0px)) + 196px); bottom: calc(max(36px, env(safe-area-inset-bottom, 0px)) + 84px); }
+#ts { left: calc(max(26px, env(safe-area-inset-left, 0px)) + 36px); bottom: calc(max(26px, env(safe-area-inset-bottom, 0px)) + 154px); }
+.tb.small { width: 54px; height: 54px; font-size: 10px; left: max(14px, env(safe-area-inset-left, 0px)); top: 94px; }
+#rotate { display: none; z-index: 50; background: rgba(8,12,15,.96); }
+@media (orientation: portrait) { body.touch.ingame #rotate { display: grid; } }
+body.touch { touch-action: none; }
+body.touch .keys, body.touch .chk { display: none; }
+.touchonly { display: none; }
+body.touch .touchonly { display: block; margin-top: 14px; }
+body.touch #hpbox { left: calc(50% - 172px); bottom: 12px; width: 150px; }
+body.touch #hpnum { font-size: 26px; }
+body.touch #helmbar, body.touch #armbar { font-size: 10px; margin-top: 4px; }
+body.touch #ammobox { left: calc(50% + 10px); right: auto; bottom: 12px; text-align: left; }
+body.touch #ammo { font-size: 30px; }
+body.touch #wname { font-size: 13px; }
+body.touch #slots { position: fixed; top: 64px; left: 50%; transform: translateX(-50%); margin: 0; pointer-events: auto; }
+body.touch #slots span { padding: 8px 10px; font-size: 13px; }
+body.touch #feed div:not(:nth-last-child(-n+3)) { display: none; }
+body.touch #info { padding: 4px 8px; font-size: 12px; max-width: 150px; }
+body.touch #info small:nth-of-type(2) { display: none; }
+body.touch #msg { top: 22%; font-size: 24px; }
+body.touch #stance { bottom: 74px; font-size: 14px; }
+body.touch #scoreline { font-size: 20px; }
+body.touch #board { max-height: 80vh; overflow: auto; }
 @media (max-width: 520px) { #hpbox { width: 180px; } #hpnum { font-size: 30px; } #ammo { font-size: 36px; } .box h1 { font-size: 36px; } }
 </style>
 </head>
@@ -134,7 +189,10 @@ button.go:active { transform: translateY(3px); box-shadow: 0 1px 0 #a86f00; }
   <div id="hpbox">
     <div id="hpnum">100<small>CAN</small></div>
     <div id="hpbar"><div id="hpfill"></div></div>
+    <div id="helmbar"><span id="helmtxt">KASK 50</span><div class="track"><div id="helmfill"></div></div></div>
+    <div id="armbar"><span id="armtxt">BƏDƏNLİK 60</span><div class="track"><div id="armfill"></div></div></div>
   </div>
+  <div id="stance"></div>
   <div id="ammobox">
     <div id="wname"></div>
     <div id="ammo"></div>
@@ -143,7 +201,19 @@ button.go:active { transform: translateY(3px); box-shadow: 0 1px 0 #a86f00; }
   <div id="msg"></div>
   <div id="board" hidden><h3 id="boardtitle">Xal cədvəli</h3><table><thead><tr><th>Oyunçu</th><th></th><th>Öldürmə</th><th>Ölüm</th></tr></thead><tbody id="rows"></tbody></table></div>
   <input id="chat" type="text" maxlength="80" placeholder="Mesaj yaz və Enter bas" hidden autocomplete="off">
+  <div id="tc" hidden>
+    <div id="look"></div>
+    <div id="js"><div id="jk"></div></div>
+    <div class="tb big" id="tf" role="button">ATƏŞ</div>
+    <div class="tb" id="tj" role="button">TULLAN</div>
+    <div class="tb" id="ta" role="button">NİŞAN</div>
+    <div class="tb" id="tr" role="button">DOLDUR</div>
+    <div class="tb" id="tcr" role="button">ƏYİL</div>
+    <div class="tb" id="ts" role="button">QAÇ</div>
+    <div class="tb small" id="tb" role="button">CƏDVƏL</div>
+  </div>
 </div>
+<div id="rotate" class="screen"><div class="box" style="text-align:center"><h2 style="margin:0 0 6px;font-size:28px">Telefonu üfüqi çevirin</h2><p class="sub" style="margin:0">Oyun yalnız üfüqi vəziyyətdə rahat oynanır.</p></div></div>
 
 <div id="lobby" class="screen">
   <form class="box" id="form" autocomplete="off">
@@ -162,14 +232,17 @@ button.go:active { transform: translateY(3px); box-shadow: 0 1px 0 #a86f00; }
     </select>
     <label for="sens">Siçan həssaslığı</label>
     <input type="range" id="sens" min="0.3" max="2.5" step="0.05" value="1">
+    <label class="chk"><input type="checkbox" id="fs" checked><span>Tam ekran (Ctrl düymələrinin brauzer qısayolları ilə toqquşmaması üçün açıq saxlayın)</span></label>
     <p id="err" role="alert"></p>
     <button class="go" id="go" type="submit">Oyuna qoşul</button>
+    <p class="hint touchonly">Telefonda: solda joystik, sağda ekranı sürüşdürərək ətrafa baxın, düymələrlə atəş edin. Telefonu üfüqi tutun.</p>
     <div class="keys">
       <span><b>W A S D</b> hərəkət</span><span><b>Siçan</b> ətrafa bax</span>
       <span><b>Sol klik</b> at</span><span><b>Sağ klik</b> nişan al</span>
-      <span><b>Boşluq</b> tullan</span><span><b>Shift</b> qaç</span>
-      <span><b>1 2 3 4</b> silah</span><span><b>R</b> doldur</span>
-      <span><b>Tab</b> xal cədvəli</span><span><b>Enter</b> söhbət</span>
+      <span><b>Boşluq</b> tullan</span><span><b>Ctrl</b> sürətli qaç</span>
+      <span><b>Shift</b> əyil</span><span><b>1 2 3 4</b> silah</span>
+      <span><b>R</b> doldur</span><span><b>Tab</b> xal cədvəli</span>
+      <span><b>Enter</b> söhbət</span><span><b>Esc</b> fasilə</span>
     </div>
   </form>
 </div>
