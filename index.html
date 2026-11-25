@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="az">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Arena Atışma</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&display=swap">
+<style>
+:root {
+  --bg: #0f1418;
+  --panel: rgba(12, 18, 22, 0.82);
+  --line: rgba(255, 255, 255, 0.16);
+  --ink: #f2efe6;
+  --dim: rgba(242, 239, 230, 0.62);
+  --amber: #ffb703;
+  --red: #ef476f;
+  --blue: #4d8dff;
+  --green: #5ad17a;
+  --font: 'Rajdhani', 'Segoe UI', system-ui, sans-serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font); font-weight: 600; overflow: hidden; }
+body { -webkit-user-select: none; user-select: none; }
+canvas#c { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+[hidden] { display: none !important; }
+
+/* HUD */
+#hud { position: fixed; inset: 0; pointer-events: none; }
+#info { position: absolute; top: 12px; left: 14px; padding: 8px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; font-size: 14px; line-height: 1.35; pointer-events: auto; cursor: pointer; }
+#info b { color: var(--amber); letter-spacing: 0.08em; }
+#info small { display: block; color: var(--dim); font-size: 12px; }
+#topc { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); text-align: center; text-shadow: 0 2px 6px rgba(0,0,0,.6); }
+#scoreline { font-size: 26px; font-weight: 700; letter-spacing: 0.06em; white-space: nowrap; }
+#scoreline .r { color: var(--red); } #scoreline .b { color: var(--blue); }
+#subline { font-size: 15px; color: var(--dim); }
+#feed { position: absolute; top: 12px; right: 14px; display: flex; flex-direction: column; gap: 4px; align-items: flex-end; max-width: 42vw; }
+#feed div { padding: 4px 10px; background: var(--panel); border-radius: 6px; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+#feed .me { border: 1px solid var(--amber); }
+#feed .chat { color: #cfe3ff; }
+#feed .w { color: var(--dim); }
+
+#cross { position: absolute; left: 50%; top: 50%; width: 0; height: 0; }
+#cross i { position: absolute; background: #fff; opacity: .9; box-shadow: 0 0 2px #000; }
+#cross i:nth-child(1) { left: -1px; top: -13px; width: 2px; height: 8px; }
+#cross i:nth-child(2) { left: -1px; top: 5px; width: 2px; height: 8px; }
+#cross i:nth-child(3) { top: -1px; left: -13px; height: 2px; width: 8px; }
+#cross i:nth-child(4) { top: -1px; left: 5px; height: 2px; width: 8px; }
+#hitm { position: absolute; left: -14px; top: -14px; width: 28px; height: 28px; opacity: 0; transition: opacity .25s; }
+#hitm::before, #hitm::after { content: ''; position: absolute; left: 13px; top: -4px; width: 2px; height: 36px; background: #fff; transform: rotate(45deg); }
+#hitm::after { transform: rotate(-45deg); }
+#hitm.on { opacity: 1; transition: none; }
+#hitm.head::before, #hitm.head::after, #hitm.kill::before, #hitm.kill::after { background: var(--red); }
+body.ads #cross { display: none; }
+#scope { position: absolute; inset: 0; display: none; background: radial-gradient(circle at 50% 50%, transparent 0, transparent 30vmin, #000 30.4vmin); }
+#scope::before, #scope::after { content: ''; position: absolute; background: #000; opacity: .85; }
+#scope::before { left: 50%; top: calc(50% - 30vmin); width: 1px; height: 60vmin; }
+#scope::after { top: 50%; left: calc(50% - 30vmin); height: 1px; width: 60vmin; }
+body.scoped #scope { display: block; }
+
+#vig { position: absolute; inset: 0; opacity: 0; background: radial-gradient(ellipse at center, transparent 45%, rgba(220, 20, 40, .65) 100%); transition: opacity .5s; }
+#vig.on { opacity: 1; transition: none; }
+#dir { position: absolute; left: 50%; top: 50%; width: 0; height: 0; opacity: 0; transition: opacity .6s; }
+#dir.on { opacity: 1; transition: none; }
+#dir i { position: absolute; left: -34px; top: -120px; width: 68px; height: 8px; border-radius: 4px; background: var(--red); box-shadow: 0 0 10px var(--red); }
+
+#hpbox { position: absolute; left: 18px; bottom: 18px; width: 260px; }
+#hpnum { font-size: 38px; font-weight: 700; line-height: 1; text-shadow: 0 2px 6px rgba(0,0,0,.6); }
+#hpnum small { font-size: 14px; color: var(--dim); letter-spacing: 0.12em; margin-left: 6px; }
+#hpbar { height: 10px; margin-top: 6px; background: rgba(0,0,0,.5); border: 1px solid var(--line); border-radius: 5px; overflow: hidden; }
+#hpfill { height: 100%; width: 100%; background: var(--green); transition: width .15s, background .2s; }
+#ammobox { position: absolute; right: 18px; bottom: 18px; text-align: right; text-shadow: 0 2px 6px rgba(0,0,0,.6); }
+#wname { font-size: 18px; color: var(--amber); letter-spacing: 0.1em; text-transform: uppercase; }
+#ammo { font-size: 46px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+#ammo small { font-size: 18px; color: var(--dim); }
+#ammo.low { color: var(--red); }
+#slots { display: flex; gap: 6px; justify-content: flex-end; margin-top: 8px; }
+#slots span { padding: 3px 9px; font-size: 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; color: var(--dim); }
+#slots span.on { color: #111; background: var(--amber); border-color: var(--amber); }
+#msg { position: absolute; left: 50%; top: 30%; transform: translateX(-50%); font-size: 34px; font-weight: 700; text-align: center; text-shadow: 0 2px 10px rgba(0,0,0,.8); letter-spacing: 0.04em; max-width: 80vw; }
+#msg small { display: block; font-size: 18px; color: var(--dim); font-weight: 600; }
+
+#board { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(620px, 94vw); padding: 14px 16px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; backdrop-filter: blur(6px); }
+#board h3 { margin: 0 0 8px; font-size: 16px; letter-spacing: 0.12em; color: var(--dim); text-transform: uppercase; }
+#board table { width: 100%; border-collapse: collapse; font-size: 18px; font-variant-numeric: tabular-nums; }
+#board th { text-align: left; font-size: 12px; letter-spacing: 0.12em; color: var(--dim); text-transform: uppercase; padding: 2px 6px; }
+#board td { padding: 4px 6px; border-top: 1px solid var(--line); }
+#board th:nth-child(n+3), #board td:nth-child(n+3) { text-align: right; width: 64px; }
+#board tr.me td { color: var(--amber); }
+.dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 8px; }
+#chat { position: absolute; left: 14px; bottom: 100px; width: min(360px, 70vw); padding: 8px 10px; font: 600 16px var(--font); color: var(--ink); background: var(--panel); border: 1px solid var(--amber); border-radius: 8px; outline: none; pointer-events: auto; user-select: text; }
+
+/* Lobbi */
+.screen { position: fixed; inset: 0; display: grid; place-items: center; padding: 16px; background:
+  linear-gradient(160deg, rgba(15,20,24,.78), rgba(15,20,24,.92)),
+  repeating-linear-gradient(90deg, rgba(255,255,255,.03) 0 1px, transparent 1px 48px),
+  repeating-linear-gradient(0deg, rgba(255,255,255,.03) 0 1px, transparent 1px 48px), var(--bg); overflow: auto; }
+.box { width: min(460px, 100%); padding: 26px 24px 22px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; }
+.box h1 { margin: 0 0 2px; font-size: 44px; line-height: 1; letter-spacing: 0.04em; text-transform: uppercase; }
+.box h1 span { color: var(--amber); }
+.box p.sub { margin: 0 0 18px; color: var(--dim); font-size: 16px; }
+label { display: block; margin: 12px 0 4px; font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--dim); }
+input[type=text], select { width: 100%; padding: 10px 12px; font: 600 18px var(--font); color: var(--ink); background: rgba(0,0,0,.35); border: 1px solid var(--line); border-radius: 8px; outline: none; }
+input[type=text]:focus, select:focus, button:focus-visible { border-color: var(--amber); outline: 2px solid var(--amber); outline-offset: 1px; }
+select option { background: #182026; }
+input[type=range] { width: 100%; accent-color: var(--amber); }
+.hint { margin: 4px 0 0; font-size: 13px; color: var(--dim); text-transform: none; letter-spacing: 0; }
+button.go { width: 100%; margin-top: 18px; padding: 12px; font: 700 22px var(--font); letter-spacing: 0.1em; text-transform: uppercase; color: #161200; background: var(--amber); border: 0; border-radius: 10px; cursor: pointer; box-shadow: 0 4px 0 #a86f00; }
+button.go:active { transform: translateY(3px); box-shadow: 0 1px 0 #a86f00; }
+.keys { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 14px; margin: 18px 0 0; padding: 12px 0 0; border-top: 1px solid var(--line); font-size: 14px; color: var(--dim); }
+.keys b { color: var(--ink); }
+#err { min-height: 1.2em; margin: 10px 0 0; color: var(--red); font-size: 15px; }
+#pause { background: rgba(8, 12, 15, .55); cursor: pointer; }
+#pause .box { text-align: center; width: min(380px, 100%); }
+#pause h2 { margin: 0 0 6px; font-size: 30px; letter-spacing: .06em; text-transform: uppercase; }
+#pause p { margin: 0; color: var(--dim); }
+#loading { position: fixed; inset: 0; display: none; place-items: center; font-size: 22px; }
+@media (max-width: 520px) { #hpbox { width: 180px; } #hpnum { font-size: 30px; } #ammo { font-size: 36px; } .box h1 { font-size: 36px; } }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="hud" hidden>
+  <div id="info" title="Dəvət linkini kopyala"><b id="rcode"></b><small id="rmode"></small><small id="rcount"></small></div>
+  <div id="topc"><div id="scoreline"></div><div id="subline"></div></div>
+  <div id="feed"></div>
+  <div id="cross"><i></i><i></i><i></i><i></i><span id="hitm"></span></div>
+  <div id="scope"></div>
+  <div id="vig"></div>
+  <div id="dir"><i></i></div>
+  <div id="hpbox">
+    <div id="hpnum">100<small>CAN</small></div>
+    <div id="hpbar"><div id="hpfill"></div></div>
+  </div>
+  <div id="ammobox">
+    <div id="wname"></div>
+    <div id="ammo"></div>
+    <div id="slots"></div>
+  </div>
+  <div id="msg"></div>
+  <div id="board" hidden><h3 id="boardtitle">Xal cədvəli</h3><table><thead><tr><th>Oyunçu</th><th></th><th>Öldürmə</th><th>Ölüm</th></tr></thead><tbody id="rows"></tbody></table></div>
+  <input id="chat" type="text" maxlength="80" placeholder="Mesaj yaz və Enter bas" hidden autocomplete="off">
+</div>
+
+<div id="lobby" class="screen">
+  <form class="box" id="form" autocomplete="off">
+    <h1>Arena <span>Atışma</span></h1>
+    <p class="sub">Dostlarınla 3D atışma. Birgə və ya bir-birinizə qarşı.</p>
+    <label for="name">Adın</label>
+    <input type="text" id="name" maxlength="14" required>
+    <label for="room">Otaq kodu</label>
+    <input type="text" id="room" maxlength="8" placeholder="Boş burax: yeni otaq yaradılır">
+    <p class="hint">Dostların eyni kodu yazıb sənin otağına qoşulur.</p>
+    <label for="mode">Rejim (yalnız yeni otaq yaradanda)</label>
+    <select id="mode">
+      <option value="ffa">Hamı hamıya qarşı (20 öldürməyə qədər)</option>
+      <option value="tdm">Komanda döyüşü: Qırmızı və Mavi (30 xal)</option>
+      <option value="coop">Birgə: botlara qarşı dalğalar</option>
+    </select>
+    <label for="sens">Siçan həssaslığı</label>
+    <input type="range" id="sens" min="0.3" max="2.5" step="0.05" value="1">
+    <p id="err" role="alert"></p>
+    <button class="go" id="go" type="submit">Oyuna qoşul</button>
+    <div class="keys">
+      <span><b>W A S D</b> hərəkət</span><span><b>Siçan</b> ətrafa bax</span>
+      <span><b>Sol klik</b> at</span><span><b>Sağ klik</b> nişan al</span>
+      <span><b>Boşluq</b> tullan</span><span><b>Shift</b> qaç</span>
+      <span><b>1 2 3 4</b> silah</span><span><b>R</b> doldur</span>
+      <span><b>Tab</b> xal cədvəli</span><span><b>Enter</b> söhbət</span>
+    </div>
+  </form>
+</div>
+
+<div id="pause" class="screen" hidden>
+  <div class="box">
+    <h2>Fasilə</h2>
+    <p>Davam etmək üçün ekrana klikləyin</p>
+    <button class="go" id="invite" type="button" style="font-size:18px">Dəvət linkini kopyala</button>
+    <p id="invlink" class="hint" style="user-select:text;word-break:break-all"></p>
+  </div>
+</div>
+
+<div id="dc" class="screen" hidden>
+  <div class="box" style="text-align:center">
+    <h1 style="font-size:32px">Bağlantı kəsildi</h1>
+    <p class="sub">Server ilə əlaqə yoxdur.</p>
+    <button class="go" id="reload" type="button">Yenidən qoşul</button>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="/shared.js"></script>
+<script src="/client.js"></script>
+</body>
+</html>
