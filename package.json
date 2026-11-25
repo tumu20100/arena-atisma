@@ -1,0 +1,9 @@
+{
+  "name": "arena-atisma",
+  "version": "1.0.0",
+  "description": "Dostlarla oynamaq üçün 3D çoxoyunçulu atışma oyunu",
+  "main": "server.js",
+  "scripts": { "start": "node server.js" },
+  "engines": { "node": ">=18" },
+  "license": "MIT"
+}
