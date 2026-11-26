@@ -43,6 +43,13 @@ cloudflared tunnel --url http://localhost:3000
 
 Raund bitəndən 8 saniyə sonra yeni oyun avtomatik başlayır.
 
+## 3a. Xəritələr
+
+Lobbidə otaq yaradanda xəritə seçilir (qoşulanlar otağın xəritəsini görür).
+
+- **Arena**: böyüdülmüş beton meydança. Hamı silahlı, kaskla və bədənliklə başlayır. Birgə (bot) rejimi yalnız burada işləyir.
+- **Açıq dünya**: 180×180 metrlik ərazi, 18 ev, ağaclar, daşlar, qutular. Hamı **silahsız, kasksız, bədənliksiz** başlayır. Evlərin içində və qutuların yanında yerdə əşyalar var: tapança, avtomat, pompalı, snayper, kask, bədənlik, tibbi çanta. Üstünə yaxınlaşmaq kifayətdir, avtomatik götürülür. Götürülən əşya 45 saniyəyə yenidən çıxır (təsadüfi növdə). Ölən oyunçunun ən güclü silahı, kaskı və bədənliyi düşür, onları da götürə bilərsiniz. Evlərin pəncərələrindən atəş etmək olar.
+
 ## 4. İdarəetmə
 
 | Düymə | İş |

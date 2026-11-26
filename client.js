@@ -71,6 +71,7 @@
   sun.shadow.camera.near = 1; sun.shadow.camera.far = 120;
   sun.shadow.bias = -0.0004;
   scene.add(sun);
+  scene.add(sun.target);
   // ağız alovu işığı: daimi, yalnız intensivliyi dəyişir (shader yenidən qurulmasın)
   var flashLight = new THREE.PointLight(0xffc870, 0, 14);
   scene.add(flashLight);
@@ -122,31 +123,6 @@
     g.beginPath(); g.moveTo(256, 0); g.lineTo(256, s); g.moveTo(0, 256); g.lineTo(s, 256); g.stroke();
   });
   tFloor.repeat.set(8, 8);
-
-  var tMarks = canvasTex(1024, function (g, s) {
-    var K = 16;
-    function X(v) { return (v + 32) * K; }
-    g.lineWidth = 6; g.strokeStyle = 'rgba(240,236,220,.55)';
-    g.beginPath(); g.arc(X(0), X(0), 10 * K, 0, Math.PI * 2); g.stroke();
-    g.setLineDash([24, 18]); g.lineWidth = 4; g.strokeStyle = 'rgba(240,236,220,.35)';
-    g.beginPath(); g.moveTo(X(-29), X(0)); g.lineTo(X(29), X(0)); g.moveTo(X(0), X(-29)); g.lineTo(X(0), X(29)); g.stroke();
-    g.setLineDash([]);
-    // mərkəzi bunkerin ətrafında xəbərdarlıq zolağı
-    g.save();
-    g.beginPath(); g.rect(X(-4.4), X(-4.4), 8.8 * K, 8.8 * K); g.rect(X(-3.4), X(-3.4), 6.8 * K, 6.8 * K);
-    g.clip('evenodd');
-    stripes(g, X(-4.4), X(-4.4), 8.8 * K, 8.8 * K, 36, 14);
-    g.restore();
-    // doğulma meydançaları
-    g.strokeStyle = 'rgba(255,183,3,.85)'; g.lineWidth = 5;
-    S.SPAWNS.forEach(function (p) {
-      var cx = X(p[0]), cz = X(p[1]), h = 2.2 * K, L = 0.9 * K;
-      [[-1, -1], [1, -1], [1, 1], [-1, 1]].forEach(function (c) {
-        var px = cx + c[0] * h, pz = cz + c[1] * h;
-        g.beginPath(); g.moveTo(px - c[0] * L, pz); g.lineTo(px, pz); g.lineTo(px, pz - c[1] * L); g.stroke();
-      });
-    });
-  }, true);
 
   var tGround = canvasTex(256, function (g, s) {
     var r = rng(5);
@@ -340,26 +316,53 @@
     }
   })();
 
-  /* ======================= Arena ======================= */
-  // uzaq yer
-  var outer = new THREE.Mesh(new THREE.PlaneGeometry(700, 700), new THREE.MeshLambertMaterial({ map: tGround }));
-  outer.rotation.x = -Math.PI / 2;
-  outer.position.y = -0.06;
-  outer.receiveShadow = true;
-  scene.add(outer);
-  // arenanın beton döşəməsi
-  var slab = new THREE.Mesh(new THREE.PlaneGeometry(S.HALF * 2 + 4, S.HALF * 2 + 4), new THREE.MeshLambertMaterial({ map: tFloor }));
-  slab.rotation.x = -Math.PI / 2;
-  slab.receiveShadow = true;
-  scene.add(slab);
-  // yol işarələri
-  var marks = new THREE.Mesh(new THREE.PlaneGeometry(64, 64), new THREE.MeshLambertMaterial({
-    map: tMarks, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2
-  }));
-  marks.rotation.x = -Math.PI / 2;
-  marks.position.y = 0.01;
-  marks.receiveShadow = true;
-  scene.add(marks);
+  /* ======================= Dünya (xəritəyə görə qurulur) ======================= */
+  var world = null, curMapId = '';
+  var FOG = { arena: [55, 200], island: [60, 250] };
+  var railMat = new THREE.MeshLambertMaterial({ color: 0x2c3138 });
+  var marksTex = null;
+
+  // eyni materialı paylaşan çoxlu qutunu bir mesh-ə birləşdirir (daha az çəkiliş çağırışı)
+  function Merger(mat) { this.mat = mat; this.p = []; this.n = []; this.u = []; this.i = []; }
+  Merger.prototype.add = function (geo, x, y, z) {
+    geo.translate(x, y, z);
+    var base = this.p.length / 3;
+    var pa = geo.attributes.position.array, na = geo.attributes.normal.array, ua = geo.attributes.uv.array, ia = geo.index.array, k;
+    for (k = 0; k < pa.length; k++) this.p.push(pa[k]);
+    for (k = 0; k < na.length; k++) this.n.push(na[k]);
+    for (k = 0; k < ua.length; k++) this.u.push(ua[k]);
+    for (k = 0; k < ia.length; k++) this.i.push(ia[k] + base);
+    geo.dispose();
+  };
+  Merger.prototype.mesh = function (cast, recv) {
+    if (!this.p.length) return null;
+    var g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(this.p, 3));
+    g.setAttribute('normal', new THREE.Float32BufferAttribute(this.n, 3));
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(this.u, 2));
+    g.setIndex(this.i);
+    var m = new THREE.Mesh(g, this.mat);
+    m.castShadow = cast; m.receiveShadow = recv;
+    return m;
+  };
+
+  function wallBox(b, i, kind) {
+    var hh = b.y1 - b.y0;
+    var m = new THREE.Mesh(scaledBox(b.w, hh, b.d, b.wall ? 4 : 2), matsByKind[kind]);
+    m.position.set(b.cx, b.y0 + hh / 2, b.cz);
+    m.castShadow = !b.wall; m.receiveShadow = true;
+    world.add(m);
+    if (b.wall) {
+      var rail = new THREE.Mesh(new THREE.BoxGeometry(b.w + 0.4, 0.35, b.d + 0.4), railMat);
+      rail.position.set(b.cx, b.h + 0.17, b.cz);
+      world.add(rail);
+    } else if (kind === 'bunker') {
+      var roof = new THREE.Mesh(new THREE.BoxGeometry(b.w + 0.3, 0.2, b.d + 0.3), railMat);
+      roof.position.set(b.cx, b.h + 0.1, b.cz);
+      roof.castShadow = true;
+      world.add(roof);
+    }
+  }
 
   function kindOf(b, i) {
     if (b.wall) return 'wall';
@@ -369,64 +372,224 @@
     if (b.h === 2) return 'mil';
     return 'crate';
   }
-  var railMat = new THREE.MeshLambertMaterial({ color: 0x2c3138 });
-  S.BOXES.forEach(function (b, i) {
-    var kind = kindOf(b, i);
-    var m = new THREE.Mesh(scaledBox(b.w, b.h, b.d, b.wall ? 4 : 2), matsByKind[kind]);
-    m.position.set(b.cx, b.h / 2, b.cz);
-    m.castShadow = !b.wall; m.receiveShadow = true;
-    scene.add(m);
-    if (b.wall) {
-      var rail = new THREE.Mesh(new THREE.BoxGeometry(b.w + 0.4, 0.35, b.d + 0.4), railMat);
-      rail.position.set(b.cx, b.h + 0.17, b.cz);
-      scene.add(rail);
-    } else if (kind === 'bunker') {
-      var roof = new THREE.Mesh(new THREE.BoxGeometry(b.w + 0.3, 0.2, b.d + 0.3), railMat);
-      roof.position.set(b.cx, b.h + 0.1, b.cz);
-      roof.castShadow = true;
-      scene.add(roof);
-    }
-  });
 
-  // projektor qüllələri
-  (function towers() {
+  function makeMarksTex(map) {
+    var size = map.half * 2 + 4, K = 1024 / size, hs = size / 2;
+    function X(v) { return (v + hs) * K; }
+    return canvasTex(1024, function (g, s) {
+      g.lineWidth = 6; g.strokeStyle = 'rgba(240,236,220,.55)';
+      g.beginPath(); g.arc(X(0), X(0), map.half * 0.33 * K, 0, Math.PI * 2); g.stroke();
+      g.setLineDash([24, 18]); g.lineWidth = 4; g.strokeStyle = 'rgba(240,236,220,.35)';
+      var e = map.half - 1;
+      g.beginPath(); g.moveTo(X(-e), X(0)); g.lineTo(X(e), X(0)); g.moveTo(X(0), X(-e)); g.lineTo(X(0), X(e)); g.stroke();
+      g.setLineDash([]);
+      g.save();
+      g.beginPath(); g.rect(X(-5.4), X(-5.4), 10.8 * K, 10.8 * K); g.rect(X(-4.4), X(-4.4), 8.8 * K, 8.8 * K);
+      g.clip('evenodd');
+      stripes(g, X(-5.4), X(-5.4), 10.8 * K, 10.8 * K, 36, 14);
+      g.restore();
+      g.strokeStyle = 'rgba(255,183,3,.85)'; g.lineWidth = 5;
+      map.spawns.forEach(function (p) {
+        var cx = X(p[0]), cz = X(p[1]), h = 2.2 * K, L = 0.9 * K;
+        [[-1, -1], [1, -1], [1, 1], [-1, 1]].forEach(function (c) {
+          var px = cx + c[0] * h, pz = cz + c[1] * h;
+          g.beginPath(); g.moveTo(px - c[0] * L, pz); g.lineTo(px, pz); g.lineTo(px, pz - c[1] * L); g.stroke();
+        });
+      });
+    }, true);
+  }
+
+  function buildArena(map) {
+    var size = map.half * 2 + 4;
+    var outer = new THREE.Mesh(new THREE.PlaneGeometry(900, 900), new THREE.MeshLambertMaterial({ map: tGround }));
+    outer.rotation.x = -Math.PI / 2; outer.position.y = -0.06; outer.receiveShadow = true;
+    world.add(outer);
+    tFloor.repeat.set(size / 8, size / 8);
+    var slab = new THREE.Mesh(new THREE.PlaneGeometry(size, size), new THREE.MeshLambertMaterial({ map: tFloor }));
+    slab.rotation.x = -Math.PI / 2; slab.receiveShadow = true;
+    world.add(slab);
+    if (marksTex) marksTex.dispose();
+    marksTex = makeMarksTex(map);
+    var marks = new THREE.Mesh(new THREE.PlaneGeometry(size, size), new THREE.MeshLambertMaterial({
+      map: marksTex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2
+    }));
+    marks.rotation.x = -Math.PI / 2; marks.position.y = 0.01; marks.receiveShadow = true;
+    world.add(marks);
+    map.boxes.forEach(function (b, i) { wallBox(b, i, kindOf(b, i)); });
+
+    // projektor qüllələri
     var pole = new THREE.MeshLambertMaterial({ color: 0x3a4047 });
     var lamp = new THREE.MeshBasicMaterial({ color: 0xfff2c4 });
+    var tp = map.half + 7;
     [[-1, -1], [1, -1], [1, 1], [-1, 1]].forEach(function (c) {
-      var x = c[0] * 37, z = c[1] * 37;
+      var x = c[0] * tp, z = c[1] * tp;
       var p = new THREE.Mesh(new THREE.BoxGeometry(0.7, 16, 0.7), pole);
-      p.position.set(x, 8, z); scene.add(p);
+      p.position.set(x, 8, z); world.add(p);
       var head = new THREE.Mesh(new THREE.BoxGeometry(3, 1, 1.4), pole);
-      head.position.set(x, 16.4, z); head.rotation.y = Math.atan2(x, z); scene.add(head);
+      head.position.set(x, 16.4, z); head.rotation.y = Math.atan2(x, z); world.add(head);
       var l = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.7, 0.2), lamp);
-      l.position.set(x - c[0] * 0.15, 16.4, z - c[1] * 0.8); l.rotation.y = Math.atan2(x, z); scene.add(l);
+      l.position.set(x - c[0] * 0.15, 16.4, z - c[1] * 0.8); l.rotation.y = Math.atan2(x, z); world.add(l);
     });
-  })();
 
-  // uzaq şəhər və dağlar
-  (function scenery() {
-    var r = rng(101);
-    var n = 40;
+    // uzaq şəhər və dağlar
+    var r = rng(101), n = 46;
     for (var i = 0; i < n; i++) {
       var a = (i / n) * Math.PI * 2 + (r() - 0.5) * 0.12;
-      var rad = 88 + r() * 22;
-      var w = 7 + r() * 8, d = 7 + r() * 8, h = 10 + r() * 32;
+      var rad = 100 + r() * 26;
+      var w = 8 + r() * 9, d = 8 + r() * 9, h = 14 + r() * 40;
       var m = new THREE.Mesh(scaledBox(w, h, d, 6), matsByKind.city);
       m.position.set(Math.cos(a) * rad, h / 2 - 0.06, Math.sin(a) * rad);
       m.rotation.y = r() * 3;
-      scene.add(m);
+      world.add(m);
     }
+    mountains(rng(102), 20, 150, 30, 40);
+  }
+
+  function mountains(r, count, baseRad, minR, minH) {
     var mtn = new THREE.MeshLambertMaterial({ color: 0x7e8fa1 });
-    for (var j = 0; j < 18; j++) {
-      var a2 = (j / 18) * Math.PI * 2 + (r() - 0.5) * 0.2;
-      var rad2 = 140 + r() * 25;
-      var rr = 30 + r() * 25, hh = 28 + r() * 40;
+    for (var j = 0; j < count; j++) {
+      var a2 = (j / count) * Math.PI * 2 + (r() - 0.5) * 0.2;
+      var rad2 = baseRad + r() * 30;
+      var rr = minR + r() * 25, hh = minH + r() * 40;
       var c = new THREE.Mesh(new THREE.ConeGeometry(rr, hh, 6), mtn);
       c.position.set(Math.cos(a2) * rad2, hh / 2 - 0.06, Math.sin(a2) * rad2);
       c.rotation.y = r() * 3;
-      scene.add(c);
+      world.add(c);
     }
-  })();
+  }
+
+  var islandT = null;
+  function islandTex() {
+    if (islandT) return islandT;
+    function wallTex(base, kind, seed) {
+      return canvasTex(256, function (g, s) {
+        var r = rng(seed);
+        g.fillStyle = base; g.fillRect(0, 0, s, s);
+        if (kind === 'brick') {
+          g.strokeStyle = 'rgba(40,20,10,.5)'; g.lineWidth = 3;
+          for (var y = 0; y < s; y += 32) {
+            g.beginPath(); g.moveTo(0, y); g.lineTo(s, y); g.stroke();
+            for (var x = (y / 32) % 2 ? 0 : 32; x < s; x += 64) { g.beginPath(); g.moveTo(x, y); g.lineTo(x, y + 32); g.stroke(); }
+          }
+        } else if (kind === 'siding') {
+          g.strokeStyle = 'rgba(0,0,0,.28)'; g.lineWidth = 3;
+          for (var y2 = 0; y2 < s; y2 += 28) { g.beginPath(); g.moveTo(0, y2); g.lineTo(s, y2); g.stroke(); }
+        }
+        dots(g, s, 1500, 0.12, r, false);
+        dots(g, s, 600, 0.08, r, true);
+        g.fillStyle = 'rgba(0,0,0,.18)'; g.fillRect(0, s - 14, s, 14);
+      });
+    }
+    function roofTex(base, seed) {
+      return canvasTex(256, function (g, s) {
+        var r = rng(seed);
+        g.fillStyle = base; g.fillRect(0, 0, s, s);
+        g.strokeStyle = 'rgba(0,0,0,.4)'; g.lineWidth = 3;
+        for (var y = 0; y < s; y += 24) {
+          g.beginPath(); g.moveTo(0, y); g.lineTo(s, y); g.stroke();
+          for (var x = (y / 24) % 2 ? 0 : 16; x < s; x += 32) { g.beginPath(); g.moveTo(x, y); g.lineTo(x, y + 24); g.stroke(); }
+        }
+        dots(g, s, 1400, 0.16, r, false);
+      });
+    }
+    var T = {};
+    T.plaster = [lambert(wallTex('#d9cfae', 'plaster', 301)), lambert(wallTex('#a8573f', 'brick', 302)), lambert(wallTex('#8497a8', 'siding', 303))];
+    T.roof = [lambert(roofTex('#8a3b2e', 311)), lambert(roofTex('#4d4f57', 312)), lambert(roofTex('#6e4c2f', 313))];
+    T.rock = lambert(canvasTex(256, function (g, s) {
+      var r = rng(321);
+      g.fillStyle = '#7d7b74'; g.fillRect(0, 0, s, s);
+      for (var i = 0; i < 40; i++) {
+        g.fillStyle = 'rgba(' + (r() < 0.5 ? '255,255,255' : '0,0,0') + ',' + (0.05 + r() * 0.1) + ')';
+        g.beginPath(); g.ellipse(r() * s, r() * s, 10 + r() * 40, 8 + r() * 25, r() * 3, 0, 6.3); g.fill();
+      }
+      dots(g, s, 2000, 0.2, r, false);
+    }));
+    T.bark = lambert(canvasTex(128, function (g, s) {
+      var r = rng(331);
+      g.fillStyle = '#5b4231'; g.fillRect(0, 0, s, s);
+      for (var i = 0; i < 24; i++) { g.fillStyle = 'rgba(0,0,0,' + (0.1 + r() * 0.2) + ')'; g.fillRect(r() * s, 0, 2 + r() * 4, s); }
+    }));
+    T.dirt = lambert(canvasTex(256, function (g, s) {
+      var r = rng(341);
+      g.fillStyle = '#8d7650'; g.fillRect(0, 0, s, s);
+      dots(g, s, 2500, 0.2, r, false); dots(g, s, 1200, 0.12, r, true);
+    }));
+    T.grass = canvasTex(256, function (g, s) {
+      var r = rng(351);
+      g.fillStyle = '#5f7f3d'; g.fillRect(0, 0, s, s);
+      for (var i = 0; i < 50; i++) {
+        g.fillStyle = 'rgba(' + (r() < 0.5 ? '120,150,70' : '55,85,35') + ',' + (0.12 + r() * 0.16) + ')';
+        g.beginPath(); g.ellipse(r() * s, r() * s, 10 + r() * 30, 6 + r() * 18, r() * 3, 0, 6.3); g.fill();
+      }
+      for (var j = 0; j < 900; j++) {
+        g.strokeStyle = 'rgba(' + (r() < 0.5 ? '170,200,100' : '40,70,30') + ',' + (0.2 + r() * 0.3) + ')'; g.lineWidth = 1;
+        var x = r() * s, y = r() * s; g.beginPath(); g.moveTo(x, y); g.lineTo(x + (r() - 0.5) * 4, y - 3 - r() * 5); g.stroke();
+      }
+    });
+    T.leaf = [0x2f5d2a, 0x3b6b2c, 0x264f26].map(function (c) { return new THREE.MeshLambertMaterial({ color: c }); });
+    islandT = T;
+    return T;
+  }
+
+  function buildIsland(map) {
+    var T = islandTex();
+    T.grass.repeat.set(110, 110);
+    var gnd = new THREE.Mesh(new THREE.PlaneGeometry(880, 880), new THREE.MeshLambertMaterial({ map: T.grass }));
+    gnd.rotation.x = -Math.PI / 2; gnd.receiveShadow = true;
+    world.add(gnd);
+
+    var M = {
+      hwall: [0, 1, 2].map(function (c) { return new Merger(T.plaster[c]); }),
+      roof: [0, 1, 2].map(function (c) { return new Merger(T.roof[c]); }),
+      crate: new Merger(matsByKind.crate), rock: new Merger(T.rock), bark: new Merger(T.bark),
+      leaf: [0, 1, 2].map(function (c) { return new Merger(T.leaf[c]); }),
+      floor: new Merger(matsByKind.crate), pad: new Merger(T.dirt)
+    };
+    map.boxes.forEach(function (b, i) {
+      var hh = b.y1 - b.y0, cy = (b.y0 + b.y1) / 2;
+      if (b.wall) { wallBox(b, i, 'wall'); return; }
+      if (b.kind === 'hwall') M.hwall[b.c].add(scaledBox(b.w, hh, b.d, 3), b.cx, cy, b.cz);
+      else if (b.kind === 'roof') M.roof[b.c].add(scaledBox(b.w, hh, b.d, 3), b.cx, cy, b.cz);
+      else if (b.kind === 'crate') M.crate.add(scaledBox(b.w, hh, b.d, 2), b.cx, cy, b.cz);
+      else if (b.kind === 'rock') M.rock.add(scaledBox(b.w, hh, b.d, 3), b.cx, cy, b.cz);
+      else if (b.kind === 'tree') {
+        var s = 0.85 + b.c * 0.15;
+        M.bark.add(new THREE.BoxGeometry(0.5, 3.2, 0.5), b.cx, 1.6, b.cz);
+        var L = M.leaf[b.c];
+        L.add(new THREE.ConeGeometry(2.1 * s, 2.8 * s, 8), b.cx, 3.6 * s, b.cz);
+        L.add(new THREE.ConeGeometry(1.6 * s, 2.4 * s, 8), b.cx, 4.9 * s, b.cz);
+        L.add(new THREE.ConeGeometry(1.05 * s, 2.2 * s, 8), b.cx, 6.1 * s, b.cz);
+      }
+    });
+    map.houses.forEach(function (h) {
+      M.floor.add(scaledBox(h.w, 0.06, h.d, 2), h.cx, 0.03, h.cz);
+      M.pad.add(scaledBox(h.w + 4, 0.03, h.d + 4, 4), h.cx, 0.015, h.cz);
+    });
+    function put(mg, cast, recv) { var m = mg.mesh(cast, recv); if (m) world.add(m); }
+    M.hwall.forEach(function (m) { put(m, true, true); });
+    M.roof.forEach(function (m) { put(m, true, true); });
+    M.leaf.forEach(function (m) { put(m, true, false); });
+    put(M.crate, true, true); put(M.rock, true, true); put(M.bark, true, false);
+    put(M.floor, false, true); put(M.pad, false, true);
+    mountains(rng(103), 24, 190, 45, 50);
+  }
+
+  function buildWorld(id) {
+    if (world) {
+      scene.remove(world);
+      world.traverse(function (o) { if (o.geometry) o.geometry.dispose(); });
+    }
+    var map = S.setMap(id);
+    curMapId = id;
+    world = new THREE.Group();
+    scene.add(world);
+    scene.fog.near = FOG[id] ? FOG[id][0] : 55;
+    scene.fog.far = FOG[id] ? FOG[id][1] : 200;
+    camera.far = id === 'island' ? 420 : 300;
+    camera.updateProjectionMatrix();
+    if (id === 'island') buildIsland(map); else buildArena(map);
+  }
+  buildWorld('arena');
 
   /* ======================= Vəziyyət ======================= */
   var ws = null, joined = false, mode = 'ffa', myTeam = null, roomCode = '';
@@ -440,10 +603,11 @@
   var editMode = false;
   var me = {
     id: 0, alive: false, hp: 100, helmet: S.HELMET_HP, armor: S.ARMOR_HP, x: 0, y: 0, z: 0, vx: 0, vz: 0, vy: 0, yaw: 0, pitch: 0,
-    onGround: true, seq: 0, wi: 1, ammo: [], reloading: false, reloadStart: 0, reloadEnd: 0,
+    onGround: true, seq: 0, wi: 1, own: [true, true, true, true], ammo: [], reloading: false, reloadStart: 0, reloadEnd: 0,
     lastFire: 0, switchEnd: 0, fireHeld: false, fireFresh: false, ads: false, kick: 0, shake: 0, deadT: 0,
     eye: S.EYE, crouch: false, sprint: false, stepAcc: 0
   };
+  function anyOwn() { return me.own[0] || me.own[1] || me.own[2] || me.own[3]; }
   function refill() { me.ammo = ORDER.map(function (id) { return W[id].mag; }); me.reloading = false; }
   refill();
 
@@ -770,6 +934,7 @@
     r.cr += ((r.crouch ? 1 : 0) - r.cr) * Math.min(1, dt * 10);
     r.group.scale.y = 1 - r.cr * 0.3;
     r.gun.scale.z = GUN_LEN[r.wi] || 1;
+    r.gun.visible = r.armed !== false;
     r.helmet.visible = r.bot || r.hm > 0;
     if (r.tag) r.tag.scale.set(1.6, 0.4 / r.group.scale.y, 1);
     if (!r.alive) {
@@ -877,11 +1042,15 @@
 
   function updateHUD() {
     var w = W[ORDER[me.wi]];
-    setText('wname', w.name);
+    var armed = !!me.own[me.wi];
+    setText('wname', armed ? w.name : 'SİLAHSIZ');
     var ammo = me.ammo[me.wi];
-    setHTML('ammo', me.reloading ? 'DOLDURULUR' : ammo + '<small> / ' + w.mag + '</small>');
-    $('ammo').classList.toggle('low', !me.reloading && ammo <= Math.ceil(w.mag * 0.25));
-    for (var i = 0; i < slotsEl.children.length; i++) slotsEl.children[i].classList.toggle('on', i === me.wi);
+    setHTML('ammo', !armed ? '<small>Evlərdən silah tap</small>' : me.reloading ? 'DOLDURULUR' : ammo + '<small> / ' + w.mag + '</small>');
+    $('ammo').classList.toggle('low', armed && !me.reloading && ammo <= Math.ceil(w.mag * 0.25));
+    for (var i = 0; i < slotsEl.children.length; i++) {
+      slotsEl.children[i].classList.toggle('on', armed && i === me.wi);
+      slotsEl.children[i].classList.toggle('off', !me.own[i]);
+    }
     var hp = Math.max(0, Math.round(me.hp));
     setHTML('hpnum', hp + '<small>CAN</small>');
     var fill = $('hpfill');
@@ -917,7 +1086,7 @@
 
   function updateInfo() {
     setText('rcode', 'OTAQ ' + roomCode);
-    setText('rmode', (MODE_NAMES[mode] || '') + ' · dəvət üçün klik');
+    setText('rmode', (MODE_NAMES[mode] || '') + ' · ' + (S.map ? S.map.name : '') + ' · dəvət üçün klik');
     setText('rcount', roster.size + ' oyunçu');
   }
 
@@ -976,11 +1145,98 @@
     hitTimer = setTimeout(function () { h.className = ''; }, 140);
   }
 
+
+  /* ======================= Loot (yerdəki əşyalar) ======================= */
+  var LOOT_NAME = { pistol: 'Tapança', rifle: 'Avtomat', shotgun: 'Pompalı', sniper: 'Snayper', helmet: 'Kask', armor: 'Bədənlik', medkit: 'Tibbi çanta' };
+  var LOOT_COL = { pistol: 0xc9ced4, rifle: 0x8fb35a, shotgun: 0xe0a255, sniper: 0x4fc3bd, helmet: 0xa4c85a, armor: 0x4f86e8, medkit: 0xff5a5a };
+  var lootGroup = new THREE.Group();
+  scene.add(lootGroup);
+  var lootItems = new Map();
+  var LG = {
+    disc: new THREE.CircleGeometry(0.6, 20),
+    beam: new THREE.CylinderGeometry(0.05, 0.05, 2.4, 6, 1, true),
+    body: new THREE.BoxGeometry(0.1, 0.16, 0.7),
+    barrel: new THREE.BoxGeometry(0.04, 0.04, 0.5),
+    grip: new THREE.BoxGeometry(0.08, 0.2, 0.1),
+    vest: new THREE.BoxGeometry(0.5, 0.56, 0.2),
+    strap: new THREE.BoxGeometry(0.1, 0.58, 0.22),
+    kit: new THREE.BoxGeometry(0.46, 0.3, 0.3),
+    crossA: new THREE.BoxGeometry(0.28, 0.07, 0.31),
+    crossB: new THREE.BoxGeometry(0.07, 0.28, 0.31)
+  };
+  var LM = {};
+  function lootMat(c) {
+    if (!LM[c]) LM[c] = new THREE.MeshLambertMaterial({ color: c, emissive: c, emissiveIntensity: 0.4 });
+    return LM[c];
+  }
+  var lootDark = new THREE.MeshLambertMaterial({ color: 0x2a2d31, emissive: 0x15171a });
+  var lootGlow = {};
+  function glowMat(c, o) {
+    var k = c + '_' + o;
+    if (!lootGlow[k]) lootGlow[k] = new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: o, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide });
+    return lootGlow[k];
+  }
+  function makeLoot(ty, x, z) {
+    var col = LOOT_COL[ty] || 0xffffff;
+    var g = new THREE.Group();
+    var item = new THREE.Group();
+    var wi = ORDER.indexOf(ty);
+    function part(geo, mat, px, py, pz) { var m = new THREE.Mesh(geo, mat); m.position.set(px, py, pz); item.add(m); return m; }
+    if (wi >= 0) {
+      var len = GUN_LEN[wi] || 1;
+      var body = part(LG.body, lootMat(col), 0, 0, 0); body.scale.z = len;
+      part(LG.barrel, lootDark, 0, 0.02, -0.45 * len).scale.z = len;
+      part(LG.grip, lootDark, 0, -0.14, 0.18 * len);
+      item.rotation.z = 0.0;
+    } else if (ty === 'helmet') {
+      var hm = part(AV.helmet, lootMat(col), 0, -0.05, 0); hm.scale.set(1.9, 1.9, 1.9);
+      part(LG.strap, lootDark, 0, 0, 0).visible = false;
+    } else if (ty === 'armor') {
+      part(LG.vest, lootMat(col), 0, 0, 0);
+      part(LG.strap, lootDark, -0.17, 0, 0); part(LG.strap, lootDark, 0.17, 0, 0);
+    } else if (ty === 'medkit') {
+      part(LG.kit, lootMat(0xf4f4f4), 0, 0, 0);
+      part(LG.crossA, lootMat(0xff3b3b), 0, 0, 0); part(LG.crossB, lootMat(0xff3b3b), 0, 0, 0);
+    }
+    item.scale.set(1.3, 1.3, 1.3);
+    g.add(item);
+    var disc = new THREE.Mesh(LG.disc, glowMat(col, 0.35));
+    disc.rotation.x = -Math.PI / 2; disc.position.y = 0.06;
+    g.add(disc);
+    var beam = new THREE.Mesh(LG.beam, glowMat(col, 0.18));
+    beam.position.y = 1.2;
+    g.add(beam);
+    g.position.set(x, 0, z);
+    lootGroup.add(g);
+    return { g: g, item: item, ty: ty, ph: Math.random() * 6 };
+  }
+  function addLoot(id, ty, x, z) {
+    removeLoot(id);
+    lootItems.set(id, makeLoot(ty, x, z));
+  }
+  function removeLoot(id) {
+    var it = lootItems.get(id);
+    if (!it) return;
+    lootGroup.remove(it.g);
+    lootItems.delete(id);
+  }
+  function clearLoot() { lootItems.forEach(function (it) { lootGroup.remove(it.g); }); lootItems.clear(); }
+  function updateLoot(now, dt) {
+    var t = now / 1000;
+    lootItems.forEach(function (it) {
+      it.item.rotation.y += dt * 1.6;
+      it.item.position.y = 0.95 + Math.sin(t * 2.2 + it.ph) * 0.08;
+    });
+  }
+
   /* ======================= Şəbəkə ======================= */
   function send(o) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); }
 
   var handlers = {
     welcome: function (m) {
+      if (m.map && m.map !== curMapId) buildWorld(m.map);
+      clearLoot();
+      (m.loot || []).forEach(function (l) { addLoot(l[0], l[1], l[2], l[3]); });
       joined = true;
       me.id = m.id; mode = m.mode; myTeam = m.team; roomCode = m.room;
       $('lobby').hidden = true;
@@ -1009,7 +1265,9 @@
       auto.on = false; auto.fwdT = 0; auto.blockT = 0;
       if (IS_TOUCH) { $('tcr').classList.remove('active'); $('ts').classList.remove('active'); }
       refill();
-      me.wi = 1; me.switchEnd = 0;
+      me.own = m.own || [true, true, true, true];
+      me.wi = me.own[1] ? 1 : Math.max(0, me.own.indexOf(true));
+      me.switchEnd = 0;
       clearMsg();
       if (!ended) $('board').hidden = !boardHeld;
     },
@@ -1041,6 +1299,7 @@
         r.alive = alive; r.hp = e[6];
         r.crouch = !!(e[8] & 4);
         r.wi = e[7] | 0;
+        r.armed = !(e[8] & 8);
         if (e[9] != null) r.hm = e[9];
         r.buf.push({ t: now, x: e[1], y: e[2], z: e[3], yaw: e[4], pitch: e[5] });
         if (r.buf.length > 12) r.buf.shift();
@@ -1114,6 +1373,19 @@
       tone(220, 0.4, 0.25, 'sawtooth');
       if (me.alive) { me.helmet = S.HELMET_HP; me.armor = S.ARMOR_HP; }
     },
+    loot: function (m) { if (m.a) addLoot(m.id, m.ty, m.x, m.z); else removeLoot(m.id); },
+    lootall: function (m) { clearLoot(); m.loot.forEach(function (l) { addLoot(l[0], l[1], l[2], l[3]); }); },
+    pick: function (m) {
+      var wi = ORDER.indexOf(m.ty), wasArmed = anyOwn();
+      me.own = m.own; me.hp = m.hp; me.helmet = m.hm; me.armor = m.am;
+      if (wi >= 0) {
+        me.ammo[wi] = W[m.ty].mag;
+        if (!wasArmed) { me.wi = wi; me.reloading = false; me.switchEnd = performance.now() + 250; }
+      }
+      showMsg((LOOT_NAME[m.ty] || '') + ' götürüldü', '', 1400);
+      tone(660, 0.08, 0.2, 'triangle');
+      tone(990, 0.12, 0.2, 'triangle');
+    },
     msg: function (m) { showMsg(m.text, '', 3500); },
     end: function (m) {
       ended = true;
@@ -1129,10 +1401,10 @@
     chat: function (m) { addFeed(m.name + ': ' + m.text, 'chat'); }
   };
 
-  function connect(name, room, modeSel) {
+  function connect(name, room, modeSel, mapSel) {
     var proto = location.protocol === 'https:' ? 'wss' : 'ws';
     ws = new WebSocket(proto + '://' + location.host + '/ws');
-    ws.onopen = function () { send({ t: 'join', name: name, room: room, mode: modeSel }); };
+    ws.onopen = function () { send({ t: 'join', name: name, room: room, mode: modeSel, map: mapSel }); };
     ws.onmessage = function (e) {
       var m;
       try { m = JSON.parse(e.data); } catch (_) { return; }
@@ -1149,6 +1421,12 @@
     send({ t: 'state', x: +me.x.toFixed(3), y: +me.y.toFixed(3), z: +me.z.toFixed(3),
       yaw: +me.yaw.toFixed(3), pitch: +me.pitch.toFixed(3), wi: me.wi, c: me.crouch ? 1 : 0, seq: me.seq });
   }, 50);
+
+  $('mode').addEventListener('change', function () {
+    var coop = $('mode').value === 'coop';
+    if (coop) $('map').value = 'arena';
+    $('map').disabled = coop;
+  });
 
   /* ======================= Giriş ======================= */
   function locked() { return IS_TOUCH ? joined : document.pointerLockElement === canvas; }
@@ -1196,7 +1474,10 @@
   document.addEventListener('contextmenu', function (e) { e.preventDefault(); });
   document.addEventListener('wheel', function (e) {
     if (!joined || !locked()) return;
-    switchWeapon((me.wi + (e.deltaY > 0 ? 1 : ORDER.length - 1)) % ORDER.length);
+    for (var k = 1; k <= ORDER.length; k++) {
+      var ni = (me.wi + (e.deltaY > 0 ? k : -k) + ORDER.length * 2) % ORDER.length;
+      if (me.own[ni]) { switchWeapon(ni); break; }
+    }
   }, { passive: true });
 
   document.addEventListener('keydown', function (e) {
@@ -1229,7 +1510,7 @@
   function closeChat() { var c = $('chat'); c.hidden = true; c.blur(); updatePause(); }
 
   function switchWeapon(i) {
-    if (!me.alive || i === me.wi || i < 0 || i >= ORDER.length) return;
+    if (!me.alive || i === me.wi || i < 0 || i >= ORDER.length || !me.own[i]) return;
     me.wi = i;
     me.reloading = false;
     me.switchEnd = performance.now() + 250;
@@ -1238,14 +1519,14 @@
   }
   function startReload(now) {
     var w = W[ORDER[me.wi]];
-    if (!me.alive || me.reloading || me.ammo[me.wi] >= w.mag) return;
+    if (!me.alive || !me.own[me.wi] || me.reloading || me.ammo[me.wi] >= w.mag) return;
     me.reloading = true;
     me.reloadStart = now;
     me.reloadEnd = now + w.reload;
     clickSound();
   }
   function tryFire(now) {
-    if (!me.alive || !locked() || chatting()) return;
+    if (!me.alive || !locked() || chatting() || !me.own[me.wi]) return;
     var w = W[ORDER[me.wi]];
     if (me.reloading || now < me.switchEnd || now < me.lastFire + w.rate) return;
     if (!w.auto && !me.fireFresh) return;
@@ -1334,6 +1615,7 @@
         if (me.fireHeld) tryFire(now);
       }
       var w = W[ORDER[me.wi]];
+      if (me.ads && !me.own[me.wi]) { me.ads = false; document.body.classList.remove('ads'); }
       var targetFov = me.ads && me.alive ? w.zoom : (me.sprint ? BASE_FOV + 6 : BASE_FOV);
       curFov += (targetFov - curFov) * Math.min(1, dt * 14);
       if (Math.abs(camera.fov - curFov) > 0.01) { camera.fov = curFov; camera.updateProjectionMatrix(); }
@@ -1357,7 +1639,7 @@
       // birinci şəxs silahı
       me.kick = Math.max(0, me.kick - dt * 0.6);
       for (var i = 0; i < vms.length; i++) vms[i].g.visible = (i === me.wi);
-      drawVM = me.alive && !scoped;
+      drawVM = me.alive && !scoped && !!me.own[me.wi];
       var adsK = me.ads ? 1 : 0;
       var px = 0.24 * (1 - adsK), py = -0.24 + 0.07 * adsK, pz = -0.5 + 0.1 * adsK;
       var sway = Math.min(1, speedNow / 5) * (me.onGround ? 1 : 0.3);
@@ -1379,6 +1661,7 @@
       var rt = now - 100;
       remotes.forEach(function (r) { updateRemote(r, rt, dt, now); });
       updateFx(now);
+      updateLoot(now, dt);
       updateHUD();
     } else {
       // lobbi arxa planı: arenanın üstündə dönən kamera
@@ -1387,6 +1670,12 @@
       camera.lookAt(0, 1.5, 0);
       for (var j = 0; j < vms.length; j++) vms[j].g.visible = false;
     }
+
+    // günəşin kölgə qutusu oyunçunu izləyir (böyük xəritələr üçün)
+    var sx = Math.round(camera.position.x / 2) * 2, sz = Math.round(camera.position.z / 2) * 2;
+    sun.target.position.set(sx, 0, sz);
+    sun.position.set(sx + SUN_POS.x, SUN_POS.y, sz + SUN_POS.z);
+    sun.target.updateMatrixWorld();
 
     // səma kameranı izləyir və buludlar yavaş sürüşür
     skyGroup.position.copy(camera.position);
@@ -1477,7 +1766,9 @@
         slotsEl.children[idx].addEventListener('touchstart', function (e) { e.preventDefault(); if (!editMode) switchWeapon(idx); }, { passive: false });
       })(i);
     }
-    document.addEventListener('touchmove', function (e) { if (joined) e.preventDefault(); }, { passive: false });
+    document.addEventListener('touchmove', function (e) {
+      if (joined && !(e.target && e.target.closest && e.target.closest('.screen'))) e.preventDefault();
+    }, { passive: false });
     document.addEventListener('gesturestart', function (e) { e.preventDefault(); });
   }
   initTouch();
@@ -1636,7 +1927,7 @@
     audio();
     goFullscreen();
     lockPointer();
-    connect(name, $('room').value, $('mode').value);
+    connect(name, $('room').value, $('mode').value, $('map').value);
   });
   $('reload').addEventListener('click', function () { location.reload(); });
   function copyInvite(e) {

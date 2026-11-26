@@ -77,7 +77,7 @@ body.scoped #scope { display: block; }
 #ammo small { font-size: 18px; color: var(--dim); }
 #ammo.low { color: var(--red); }
 #slots { display: flex; gap: 6px; justify-content: flex-end; margin-top: 8px; }
-#slots span { padding: 3px 9px; font-size: 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; color: var(--dim); }
+#slots span.off { opacity: .3; } #slots span { padding: 3px 9px; font-size: 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; color: var(--dim); }
 #slots span.on { color: #111; background: var(--amber); border-color: var(--amber); }
 #msg { position: absolute; left: 50%; top: 30%; transform: translateX(-50%); font-size: 34px; font-weight: 700; text-align: center; text-shadow: 0 2px 10px rgba(0,0,0,.8); letter-spacing: 0.04em; max-width: 80vw; }
 #msg small { display: block; font-size: 18px; color: var(--dim); font-weight: 600; }
@@ -93,10 +93,11 @@ body.scoped #scope { display: block; }
 #chat { position: absolute; left: 14px; bottom: 100px; width: min(360px, 70vw); padding: 8px 10px; font: 600 16px var(--font); color: var(--ink); background: var(--panel); border: 1px solid var(--amber); border-radius: 8px; outline: none; pointer-events: auto; user-select: text; }
 
 /* Lobbi */
-.screen { position: fixed; inset: 0; display: grid; place-items: center; padding: 16px; background:
+.screen { position: fixed; inset: 0; display: grid; justify-items: center; align-items: start; padding: 16px; touch-action: pan-y; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; background:
   linear-gradient(160deg, rgba(15,20,24,.78), rgba(15,20,24,.92)),
   repeating-linear-gradient(90deg, rgba(255,255,255,.03) 0 1px, transparent 1px 48px),
   repeating-linear-gradient(0deg, rgba(255,255,255,.03) 0 1px, transparent 1px 48px), var(--bg); overflow: auto; }
+.screen > .box { margin: auto; }
 .box { width: min(460px, 100%); padding: 26px 24px 22px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; }
 .box h1 { margin: 0 0 2px; font-size: 44px; line-height: 1; letter-spacing: 0.04em; text-transform: uppercase; }
 .box h1 span { color: var(--amber); }
@@ -257,6 +258,11 @@ body.editing .sel { outline: 3px solid var(--amber) !important; background-color
       <option value="ffa">Hamı hamıya qarşı (20 öldürməyə qədər)</option>
       <option value="tdm">Komanda döyüşü: Qırmızı və Mavi (30 xal)</option>
       <option value="coop">Birgə: botlara qarşı dalğalar</option>
+    </select>
+    <label for="map">Xəritə (yalnız yeni otaq yaradanda)</label>
+    <select id="map">
+      <option value="arena">Arena: böyük beton meydança, silahlar hazırdır</option>
+      <option value="island">Açıq dünya: evlərdə silah, kask, bədənlik tap</option>
     </select>
     <label for="sens">Siçan həssaslığı</label>
     <input type="range" id="sens" min="0.3" max="2.5" step="0.05" value="1">

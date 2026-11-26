@@ -22,6 +22,9 @@ const TDM_KILLS = 30;
 const RESPAWN_MS = 3000;
 const END_MS = 8000;
 const MODES = ['ffa', 'tdm', 'coop'];
+const LOOT_RESPAWN_MS = 45000;
+const DROP_LIFE_MS = 90000;
+const PICK_R = 1.4;
 
 /* ---------------- HTTP (statik fayllar) ---------------- */
 const TYPES = {
@@ -159,9 +162,18 @@ const r2 = (v) => Math.round(v * 100) / 100;
 const r1 = (v) => Math.round(v * 10) / 10;
 
 class Room {
-  constructor(code, mode) {
+  constructor(code, mode, mapId) {
     this.code = code;
     this.mode = mode;
+    this.map = S.MAPS[mapId] || S.MAPS.arena;
+    if (mode === 'coop') this.map = S.MAPS.arena; // botlar yalnız arenada
+    this.loot = [];
+    this.nextLoot = 1;
+    if (this.map.loot) {
+      for (const sp of this.map.lootSpots) {
+        this.loot.push({ id: this.nextLoot++, ty: S.rollLoot(Math.random), x: sp[0], z: sp[1], alive: true, at: 0, temp: false });
+      }
+    }
     this.players = new Map();
     this.bots = [];
     this.nextId = 1;
@@ -192,7 +204,7 @@ class Room {
       id: this.nextId++, conn, name, bot: false, team: null,
       x: 0, y: 0, z: 0, yaw: 0, pitch: 0, hp: 100, alive: false,
       kills: 0, deaths: 0, wi: 0, seq: 0, lastFire: {}, lastState: Date.now(),
-      lastHurt: 0, respawnAt: 0, crouch: false, helmet: S.HELMET_HP, armor: S.ARMOR_HP
+      lastHurt: 0, respawnAt: 0, crouch: false, helmet: 0, armor: 0, own: [true, true, true, true]
     };
     if (this.mode === 'tdm') {
       let red = 0, blue = 0;
@@ -202,7 +214,8 @@ class Room {
     this.players.set(p.id, p);
     conn.player = p;
     conn.room = this;
-    conn.send({ t: 'welcome', id: p.id, room: this.code, mode: this.mode, team: p.team });
+    conn.send({ t: 'welcome', id: p.id, room: this.code, mode: this.mode, team: p.team, map: this.map.id,
+      loot: this.loot.filter((l) => l.alive).map((l) => [l.id, l.ty, r1(l.x), r1(l.z)]) });
     this.spawn(p);
     this.sendRoster();
     return p;
@@ -235,7 +248,7 @@ class Room {
 
   pickSpawn() {
     const others = this.entities();
-    const scored = S.SPAWNS.map((sp) => {
+    const scored = this.map.spawns.map((sp) => {
       let min = 1e9;
       for (const o of others) min = Math.min(min, Math.hypot(o.x - sp[0], o.z - sp[1]));
       return { sp, min: min + Math.random() * 6 };
@@ -247,11 +260,13 @@ class Room {
     const sp = this.pickSpawn();
     p.x = sp[0]; p.z = sp[1]; p.y = 0;
     p.hp = 100; p.alive = true; p.respawnAt = 0;
-    p.helmet = S.HELMET_HP; p.armor = S.ARMOR_HP; p.crouch = false;
+    if (this.map.loot) { p.helmet = 0; p.armor = 0; p.own = [false, false, false, false]; }
+    else { p.helmet = S.HELMET_HP; p.armor = S.ARMOR_HP; p.own = [true, true, true, true]; }
+    p.crouch = false;
     p.seq++; p.lastState = Date.now();
     const yaw = Math.atan2(p.x, p.z);
     p.yaw = yaw; p.pitch = 0;
-    p.conn.send({ t: 'spawn', x: p.x, y: p.y, z: p.z, yaw, seq: p.seq, helmet: p.helmet, armor: p.armor });
+    p.conn.send({ t: 'spawn', x: p.x, y: p.y, z: p.z, yaw, seq: p.seq, helmet: p.helmet, armor: p.armor, own: p.own });
   }
 
   reset() {
@@ -260,9 +275,82 @@ class Room {
     this.bots = [];
     this.wave = 0;
     this.waveAt = 0;
+    this.resetLoot();
     for (const p of this.players.values()) { p.kills = 0; p.deaths = 0; this.spawn(p); }
     this.broadcast({ t: 'reset' });
     this.sendRoster();
+  }
+
+  /* ---- loot ---- */
+  resetLoot() {
+    if (!this.map.loot) return;
+    this.loot = [];
+    for (const sp of this.map.lootSpots) {
+      this.loot.push({ id: this.nextLoot++, ty: S.rollLoot(Math.random), x: sp[0], z: sp[1], alive: true, at: 0, temp: false });
+    }
+    this.broadcast({ t: 'lootall', loot: this.loot.map((l) => [l.id, l.ty, r1(l.x), r1(l.z)]) });
+  }
+
+  dropLoot(p) {
+    if (!this.map.loot) return;
+    const items = [];
+    for (let i = S.WEAPON_ORDER.length - 1; i >= 0; i--) if (p.own[i]) { items.push(S.WEAPON_ORDER[i]); break; }
+    if (p.helmet > 0) items.push('helmet');
+    if (p.armor > 0) items.push('armor');
+    items.forEach((ty, k) => {
+      const a = (k / Math.max(1, items.length)) * Math.PI * 2 + Math.random();
+      const l = { id: this.nextLoot++, ty, x: S.clamp(p.x + Math.cos(a) * 0.8, -this.map.half + 1, this.map.half - 1), z: S.clamp(p.z + Math.sin(a) * 0.8, -this.map.half + 1, this.map.half - 1), alive: true, at: Date.now() + DROP_LIFE_MS, temp: true };
+      this.loot.push(l);
+      this.broadcast({ t: 'loot', id: l.id, a: 1, ty: l.ty, x: r1(l.x), z: r1(l.z) });
+    });
+  }
+
+  updateLoot(now) {
+    if (!this.map.loot) return;
+    for (let i = this.loot.length - 1; i >= 0; i--) {
+      const l = this.loot[i];
+      if (!l.alive) {
+        if (l.temp) { this.loot.splice(i, 1); continue; }
+        if (now >= l.at) {
+          l.alive = true; l.ty = S.rollLoot(Math.random);
+          this.broadcast({ t: 'loot', id: l.id, a: 1, ty: l.ty, x: r1(l.x), z: r1(l.z) });
+        }
+      } else if (l.temp && now >= l.at) {
+        this.loot.splice(i, 1);
+        this.broadcast({ t: 'loot', id: l.id, a: 0 });
+      }
+    }
+    for (const p of this.players.values()) {
+      if (!p.alive) continue;
+      for (const l of this.loot) {
+        if (!l.alive) continue;
+        if (Math.abs(p.x - l.x) > PICK_R || Math.abs(p.z - l.z) > PICK_R || Math.hypot(p.x - l.x, p.z - l.z) > PICK_R) continue;
+        if (this.tryPick(p, l)) {
+          l.alive = false;
+          l.at = now + LOOT_RESPAWN_MS;
+          this.broadcast({ t: 'loot', id: l.id, a: 0 });
+        }
+      }
+    }
+  }
+
+  tryPick(p, l) {
+    const wi = S.WEAPON_ORDER.indexOf(l.ty);
+    if (wi >= 0) {
+      if (p.own[wi]) return false;
+      p.own[wi] = true;
+    } else if (l.ty === 'helmet') {
+      if (p.helmet >= S.HELMET_HP) return false;
+      p.helmet = S.HELMET_HP;
+    } else if (l.ty === 'armor') {
+      if (p.armor >= S.ARMOR_HP) return false;
+      p.armor = S.ARMOR_HP;
+    } else if (l.ty === 'medkit') {
+      if (p.hp >= 100) return false;
+      p.hp = Math.min(100, p.hp + 50);
+    } else return false;
+    p.conn.send({ t: 'pick', ty: l.ty, hp: Math.round(p.hp), hm: Math.round(p.helmet), am: Math.round(p.armor), own: p.own });
+    return true;
   }
 
   end(text) {
@@ -280,8 +368,10 @@ class Room {
     if (!w) return;
     const now = Date.now();
     if (now - (p.lastFire[w.id] || 0) < w.rate * 0.8) return;
+    const widx = S.WEAPON_ORDER.indexOf(w.id);
+    if (!p.own[widx]) return;
     p.lastFire[w.id] = now;
-    p.wi = S.WEAPON_ORDER.indexOf(w.id);
+    p.wi = widx;
 
     let dx = Number(m.dx), dy = Number(m.dy), dz = Number(m.dz);
     if (!isFinite(dx) || !isFinite(dy) || !isFinite(dz)) return;
@@ -306,7 +396,7 @@ class Room {
       let rx = dx + ux * a + vx * b, ry = dy + uy * a + vy * b, rz = dz + uz * a + vz * b;
       const rl = Math.hypot(rx, ry, rz); rx /= rl; ry /= rl; rz /= rl;
 
-      let tMax = S.castWorld(ox, oy, oz, rx, ry, rz, w.range);
+      let tMax = S.castWorld(ox, oy, oz, rx, ry, rz, w.range, this.map);
       let best = null, bestT = tMax;
       for (const e of targets) {
         const t = S.rayCyl(ox, oy, oz, rx, ry, rz, e.x, e.z, e.y, e.y + (e.crouch ? S.CROUCH_HEIGHT : S.HEIGHT), 0.45);
@@ -355,6 +445,7 @@ class Room {
   kill(victim, attacker, head, wid) {
     victim.alive = false;
     victim.hp = 0;
+    if (!victim.bot) this.dropLoot(victim);
     victim.deaths++;
     if (attacker !== victim) attacker.kills++;
     if (this.mode === 'tdm' && attacker.team in this.score) this.score[attacker.team]++;
@@ -403,7 +494,7 @@ class Room {
       yaw: 0, pitch: 0, hp: Math.min(100, 50 + this.wave * 8), alive: true, wi: 1,
       kills: 0, deaths: 0, nextShot: Date.now() + 1500 + Math.random() * 1500, strafe: Math.random() * 6
     };
-    S.resolve(b);
+    S.resolve(b, this.map);
     this.bots.push(b);
   }
 
@@ -444,7 +535,7 @@ class Room {
         const ddx = b.x - o.x, ddz = b.z - o.z, dd = Math.hypot(ddx, ddz);
         if (dd < 0.9 && dd > 0.001) { b.x += ddx / dd * 0.05; b.z += ddz / dd * 0.05; }
       }
-      S.resolve(b);
+      S.resolve(b, this.map);
       const intended = Math.hypot(mx, mz) * speed * dt;
       const moved = Math.hypot(b.x - px, b.z - pz);
       if (intended > 0.01 && moved < intended * 0.4) b.stuck = (b.stuck || 0) + dt;
@@ -461,7 +552,7 @@ class Room {
         let rdx = tx - ox, rdy = ty - oy, rdz = tz - oz;
         const rl = Math.hypot(rdx, rdy, rdz);
         rdx /= rl; rdy /= rl; rdz /= rl;
-        const wall = S.castWorld(ox, oy, oz, rdx, rdy, rdz, rl);
+        const wall = S.castWorld(ox, oy, oz, rdx, rdy, rdz, rl, this.map);
         if (wall >= rl - 0.01) {
           b.nextShot = now + 700 + Math.random() * 600;
           const chance = Math.max(0.15, 0.45 - dist * 0.008);
@@ -486,6 +577,7 @@ class Room {
     } else {
       this.coopLogic(now);
       this.updateBots(now);
+      this.updateLoot(now);
       for (const p of this.players.values()) {
         if (!p.alive && p.respawnAt && now >= p.respawnAt) this.spawn(p);
       }
@@ -497,7 +589,7 @@ class Room {
 
     const arr = [];
     for (const p of this.players.values()) {
-      arr.push([p.id, r2(p.x), r2(p.y), r2(p.z), r2(p.yaw), r2(p.pitch), Math.round(p.hp), p.wi, (p.alive ? 1 : 0) | (p.crouch ? 4 : 0), Math.round(p.helmet), Math.round(p.armor)]);
+      arr.push([p.id, r2(p.x), r2(p.y), r2(p.z), r2(p.yaw), r2(p.pitch), Math.round(p.hp), p.wi, (p.alive ? 1 : 0) | (p.crouch ? 4 : 0) | (p.own.some(Boolean) ? 0 : 8), Math.round(p.helmet), Math.round(p.armor)]);
     }
     for (const b of this.bots) {
       arr.push([b.id, r2(b.x), r2(b.y), r2(b.z), r2(b.yaw), 0, Math.round(b.hp), 1, 3]);
@@ -524,7 +616,7 @@ function onMessage(conn, raw) {
     if (!room) {
       if (!code) code = randomCode();
       const mode = MODES.includes(m.mode) ? m.mode : 'ffa';
-      room = new Room(code, mode);
+      room = new Room(code, mode, String(m.map || 'arena'));
       rooms.set(code, room);
     }
     if (room.players.size >= MAX_PLAYERS) {
@@ -549,14 +641,15 @@ function onMessage(conn, raw) {
     const maxd = 8.5 * dt * 1.3 + 0.5;
     const d = Math.hypot(x - p.x, z - p.z);
     if (d > maxd) { x = p.x + (x - p.x) / d * maxd; z = p.z + (z - p.z) / d * maxd; }
-    p.x = S.clamp(x, -S.HALF + 0.4, S.HALF - 0.4);
-    p.z = S.clamp(z, -S.HALF + 0.4, S.HALF - 0.4);
+    const half = room.map.half;
+    p.x = S.clamp(x, -half + 0.4, half - 0.4);
+    p.z = S.clamp(z, -half + 0.4, half - 0.4);
     p.y = S.clamp(y, 0, 6);
     const yaw = Number(m.yaw), pitch = Number(m.pitch);
     if (isFinite(yaw)) p.yaw = yaw;
     if (isFinite(pitch)) p.pitch = S.clamp(pitch, -1.6, 1.6);
     const wi = m.wi | 0;
-    if (wi >= 0 && wi < S.WEAPON_ORDER.length) p.wi = wi;
+    if (wi >= 0 && wi < S.WEAPON_ORDER.length && p.own[wi]) p.wi = wi;
     p.crouch = m.c === 1;
   } else if (m.t === 'shoot') {
     room.handleShoot(p, m);
