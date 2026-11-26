@@ -7,6 +7,20 @@
     set: function (k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
   };
   var clamp = S.clamp;
+  var settings = { sound: true, volume: 0.8, shots: true, steps: true, hits: true, autorun: true, sens: 1 };
+  (function loadSettings() {
+    try {
+      var raw = store.get('arena-settings', null);
+      if (raw) {
+        var sv = JSON.parse(raw);
+        for (var k in settings) if (sv && k in sv && typeof sv[k] === typeof settings[k]) settings[k] = sv[k];
+      } else {
+        var old = parseFloat(store.get('arena-sens', ''));
+        if (old) settings.sens = old;
+      }
+    } catch (e) {}
+  })();
+  function saveSettings() { store.set('arena-settings', JSON.stringify(settings)); }
   var BASE_FOV = 75;
   var IS_TOUCH = false;
   try { IS_TOUCH = (('ontouchstart' in window) || navigator.maxTouchPoints > 0) && !!window.matchMedia && window.matchMedia('(pointer: coarse)').matches; } catch (e) {}
@@ -418,10 +432,12 @@
   var ws = null, joined = false, mode = 'ffa', myTeam = null, roomCode = '';
   var roster = new Map();
   var meta = { s: 'play', r: 0, b: 0, wv: 0, bots: 0 };
-  var sens = 1;
+  var sens = settings.sens;
   var keys = {};
   var boardHeld = false, ended = false;
   var tc = { move: { x: 0, y: 0 }, jump: false, crouch: false, sprint: false };
+  var auto = { fwdT: 0, on: false, blockT: 0 };
+  var editMode = false;
   var me = {
     id: 0, alive: false, hp: 100, helmet: S.HELMET_HP, armor: S.ARMOR_HP, x: 0, y: 0, z: 0, vx: 0, vz: 0, vy: 0, yaw: 0, pitch: 0,
     onGround: true, seq: 0, wi: 1, ammo: [], reloading: false, reloadStart: 0, reloadEnd: 0,
@@ -432,7 +448,13 @@
   refill();
 
   /* ======================= Səs ======================= */
-  var actx = null, noiseBuf = null;
+  var actx = null, noiseBuf = null, master = null;
+  function dest(a) {
+    if (!master) { master = a.createGain(); master.connect(a.destination); }
+    master.gain.value = settings.sound ? settings.volume : 0;
+    return master;
+  }
+  function applyAudio() { if (master) master.gain.value = settings.sound ? settings.volume : 0; }
   function audio() {
     if (!actx) { try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { actx = null; } }
     if (actx && actx.state === 'suspended') actx.resume();
@@ -451,33 +473,36 @@
     shotgun: { f: 1200, d: 0.38, low: 70 }, sniper: { f: 1500, d: 0.6, low: 55 }
   };
   function shotSound(wid, vol) {
+    if (!settings.sound || !settings.shots) return;
     var a = audio(); if (!a || vol < 0.01) return;
     var c = SHOT_SND[wid] || SHOT_SND.rifle, t = a.currentTime;
     var n = a.createBufferSource(); n.buffer = noise(a); n.playbackRate.value = 0.8 + Math.random() * 0.4;
     var lp = a.createBiquadFilter(); lp.type = 'lowpass';
     lp.frequency.setValueAtTime(c.f, t); lp.frequency.exponentialRampToValueAtTime(200, t + c.d);
     var g = a.createGain(); g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + c.d);
-    n.connect(lp); lp.connect(g); g.connect(a.destination);
+    n.connect(lp); lp.connect(g); g.connect(dest(a));
     n.start(t, Math.random() * 0.5); n.stop(t + c.d + 0.05);
     var o = a.createOscillator(); o.type = 'sine';
     o.frequency.setValueAtTime(c.low * 2, t); o.frequency.exponentialRampToValueAtTime(c.low * 0.5, t + c.d);
     var og = a.createGain(); og.gain.setValueAtTime(vol * 0.8, t); og.gain.exponentialRampToValueAtTime(0.001, t + c.d);
-    o.connect(og); og.connect(a.destination); o.start(t); o.stop(t + c.d + 0.05);
+    o.connect(og); og.connect(dest(a)); o.start(t); o.stop(t + c.d + 0.05);
   }
   function tone(freq, dur, vol, type) {
+    if (!settings.sound || !settings.hits) return;
     var a = audio(); if (!a) return;
     var t = a.currentTime, o = a.createOscillator(), g = a.createGain();
     o.type = type || 'sine'; o.frequency.setValueAtTime(freq, t);
     g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
-    o.connect(g); g.connect(a.destination); o.start(t); o.stop(t + dur + 0.02);
+    o.connect(g); g.connect(dest(a)); o.start(t); o.stop(t + dur + 0.02);
   }
   function stepSound(vol) {
+    if (!settings.sound || !settings.steps) return;
     var a = audio(); if (!a) return;
     var t = a.currentTime;
     var n = a.createBufferSource(); n.buffer = noise(a);
     var lp = a.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 500 + Math.random() * 300;
     var g = a.createGain(); g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.07);
-    n.connect(lp); lp.connect(g); g.connect(a.destination);
+    n.connect(lp); lp.connect(g); g.connect(dest(a));
     n.start(t, Math.random() * 0.6); n.stop(t + 0.09);
   }
   function clickSound() { tone(900, 0.04, 0.12, 'square'); }
@@ -871,7 +896,7 @@
     $('armfill').style.width = (am / S.ARMOR_HP * 100) + '%';
     $('armbar').classList.toggle('gone', am <= 0);
     if (IS_TOUCH) $('ta').classList.toggle('active', me.ads);
-    setText('stance', !me.alive ? '' : me.crouch ? 'ƏYİLİB' : me.sprint ? 'QAÇIR' : '');
+    setText('stance', !me.alive ? '' : me.crouch ? 'ƏYİLİB' : me.sprint ? (auto.on ? 'QAÇIR (AVTO)' : 'QAÇIR') : '');
   }
 
   function updateScoreline() {
@@ -961,7 +986,7 @@
       $('lobby').hidden = true;
       $('hud').hidden = false;
       document.body.classList.add('ingame');
-      if (IS_TOUCH) $('tc').hidden = false;
+      if (IS_TOUCH) { $('tc').hidden = false; applyLayout(); }
       document.body.classList.remove('ads', 'scoped');
       updateInfo();
       updatePause();
@@ -981,6 +1006,7 @@
       me.armor = m.armor != null ? m.armor : S.ARMOR_HP;
       me.crouch = false; me.eye = S.EYE;
       tc.crouch = false; tc.sprint = false;
+      auto.on = false; auto.fwdT = 0; auto.blockT = 0;
       if (IS_TOUCH) { $('tcr').classList.remove('active'); $('ts').classList.remove('active'); }
       refill();
       me.wi = 1; me.switchEnd = 0;
@@ -1247,7 +1273,15 @@
     }
     // Shift: əyilmə, Ctrl: sürətli qaçış (əyilmə üstündür)
     me.crouch = active && (!!(keys.ShiftLeft || keys.ShiftRight) || tc.crouch);
-    me.sprint = active && !me.crouch && (!!(keys.ControlLeft || keys.ControlRight) || tc.sprint) && fw > 0.2 && !me.ads;
+    // avtomatik qaçış: 2 san. fasiləsiz irəli getdikdən sonra başlayır və düyməni buraxsan da davam edir.
+    // Geri getmək, əyilmək və ya nişan almaq normal yerişə qaytarır.
+    if (!active || !settings.autorun || me.crouch || me.ads || fw < -0.2) { auto.on = false; auto.fwdT = 0; auto.blockT = 0; }
+    else if (!auto.on) {
+      if (fw > 0.5) { auto.fwdT += dt; if (auto.fwdT >= 2) { auto.on = true; auto.blockT = 0; } }
+      else auto.fwdT = 0;
+    }
+    if (auto.on && fw < 0.2) fw = 1; // əl boşdur, qaçış davam edir
+    me.sprint = active && !me.crouch && (!!(keys.ControlLeft || keys.ControlRight) || tc.sprint || auto.on) && fw > 0.2 && !me.ads;
     var speed = me.sprint ? 8 : 5.2;
     if (me.crouch) speed = 2.6;
     if (me.ads) speed *= 0.55;
@@ -1274,6 +1308,7 @@
     me.eye += (eyeT - me.eye) * Math.min(1, dt * 12);
     // addım səsi
     var sp = Math.hypot(me.vx, me.vz);
+    if (auto.on) { auto.blockT = sp < 2 ? auto.blockT + dt : 0; if (auto.blockT > 0.4) { auto.on = false; auto.fwdT = 0; } }
     if (me.onGround && sp > 1.2 && me.alive) {
       me.stepAcc += sp * dt;
       var stride = me.sprint ? 2.6 : 2.0;
@@ -1398,16 +1433,16 @@
       for (var i = 0; i < e.changedTouches.length; i++) if (e.changedTouches[i].identifier === id) return e.changedTouches[i];
       return null;
     }
-    js.addEventListener('touchstart', function (e) { e.preventDefault(); audio(); var t = e.changedTouches[0]; joyId = t.identifier; joy(t); }, { passive: false });
-    js.addEventListener('touchmove', function (e) { e.preventDefault(); var t = findTouch(e, joyId); if (t) joy(t); }, { passive: false });
+    js.addEventListener('touchstart', function (e) { e.preventDefault(); if (editMode) return; audio(); var t = e.changedTouches[0]; joyId = t.identifier; joy(t); }, { passive: false });
+    js.addEventListener('touchmove', function (e) { e.preventDefault(); if (editMode) return; var t = findTouch(e, joyId); if (t) joy(t); }, { passive: false });
     js.addEventListener('touchend', function (e) { if (findTouch(e, joyId)) joyEnd(); });
     js.addEventListener('touchcancel', function (e) { if (findTouch(e, joyId)) joyEnd(); });
 
-    look.addEventListener('touchstart', function (e) { e.preventDefault(); var t = e.changedTouches[0]; lookId = t.identifier; lx = t.clientX; ly = t.clientY; }, { passive: false });
+    look.addEventListener('touchstart', function (e) { e.preventDefault(); if (editMode) return; var t = e.changedTouches[0]; lookId = t.identifier; lx = t.clientX; ly = t.clientY; }, { passive: false });
     look.addEventListener('touchmove', function (e) {
       e.preventDefault();
       var t = findTouch(e, lookId);
-      if (!t || !me.alive) return;
+      if (editMode || !t || !me.alive) return;
       var k = 0.0042 * sens * (camera.fov / BASE_FOV);
       me.yaw -= (t.clientX - lx) * k;
       me.pitch = clamp(me.pitch - (t.clientY - ly) * k, -1.5, 1.5);
@@ -1418,8 +1453,8 @@
 
     function btn(id, down, up) {
       var el = $(id);
-      el.addEventListener('touchstart', function (e) { e.preventDefault(); audio(); el.classList.add('on'); if (down) down(); }, { passive: false });
-      var end = function (e) { e.preventDefault(); el.classList.remove('on'); if (up) up(); };
+      el.addEventListener('touchstart', function (e) { e.preventDefault(); if (editMode) return; audio(); el.classList.add('on'); if (down) down(); }, { passive: false });
+      var end = function (e) { e.preventDefault(); el.classList.remove('on'); if (!editMode && up) up(); };
       el.addEventListener('touchend', end, { passive: false });
       el.addEventListener('touchcancel', end, { passive: false });
     }
@@ -1439,7 +1474,7 @@
     // silah sətirinə toxunaraq dəyişmək
     for (var i = 0; i < slotsEl.children.length; i++) {
       (function (idx) {
-        slotsEl.children[idx].addEventListener('touchstart', function (e) { e.preventDefault(); switchWeapon(idx); }, { passive: false });
+        slotsEl.children[idx].addEventListener('touchstart', function (e) { e.preventDefault(); if (!editMode) switchWeapon(idx); }, { passive: false });
       })(i);
     }
     document.addEventListener('touchmove', function (e) { if (joined) e.preventDefault(); }, { passive: false });
@@ -1447,13 +1482,144 @@
   }
   initTouch();
 
+  /* ======================= Ayarlar və düymə düzənləyicisi ======================= */
+  var CTL_IDS = ['js', 'tf', 'tj', 'ta', 'tr', 'tcr', 'ts', 'tb'];
+  var CTL_NAMES = { js: 'Joystik', tf: 'Atəş', tj: 'Tullan', ta: 'Nişan', tr: 'Doldur', tcr: 'Əyil', ts: 'Qaç', tb: 'Cədvəl' };
+  var layout = {};
+  try {
+    var lraw = JSON.parse(store.get('arena-layout', '{}'));
+    CTL_IDS.forEach(function (id) {
+      var v = lraw && lraw[id];
+      if (v && isFinite(v.x) && isFinite(v.y) && isFinite(v.s)) layout[id] = { x: clamp(v.x, 0.04, 0.96), y: clamp(v.y, 0.04, 0.96), s: clamp(v.s, 0.6, 1.8) };
+    });
+  } catch (e) {}
+  function saveLayout() { store.set('arena-layout', JSON.stringify(layout)); }
+  function applyCtl(id) {
+    var cfg = layout[id], el = $(id);
+    if (!cfg || !el) return;
+    el.style.setProperty('--s', cfg.s);
+    el.style.right = 'auto'; el.style.bottom = 'auto';
+    var w = el.offsetWidth, h = el.offsetHeight;
+    if (!w) return; // gizlidir: görünəndə yenidən tətbiq olunur
+    el.style.left = (cfg.x * window.innerWidth - w / 2) + 'px';
+    el.style.top = (cfg.y * window.innerHeight - h / 2) + 'px';
+  }
+  function applyLayout() { CTL_IDS.forEach(applyCtl); }
+  function resetLayout() {
+    layout = {};
+    saveLayout();
+    CTL_IDS.forEach(function (id) {
+      var el = $(id);
+      ['left', 'top', 'right', 'bottom'].forEach(function (k) { el.style[k] = ''; });
+      el.style.removeProperty('--s');
+    });
+    selCtl = null;
+    $('edsize').disabled = true; $('edsize').value = 1;
+    $('edname').textContent = 'Düyməni seçin';
+    CTL_IDS.forEach(function (id) { $(id).classList.remove('sel'); });
+  }
+  window.addEventListener('resize', applyLayout);
+  window.addEventListener('orientationchange', function () { setTimeout(applyLayout, 200); });
+
+  var selCtl = null, drag = null;
+  function ensureCtl(id) {
+    if (!layout[id]) {
+      var r = $(id).getBoundingClientRect();
+      layout[id] = { x: (r.left + r.width / 2) / window.innerWidth, y: (r.top + r.height / 2) / window.innerHeight, s: 1 };
+    }
+    return layout[id];
+  }
+  function selectCtl(id) {
+    selCtl = id;
+    CTL_IDS.forEach(function (k) { $(k).classList.toggle('sel', k === id); });
+    $('edname').textContent = CTL_NAMES[id];
+    $('edsize').disabled = false;
+    $('edsize').value = ensureCtl(id).s;
+  }
+  function setEdit(on) {
+    editMode = on;
+    document.body.classList.toggle('editing', on);
+    $('editbar').hidden = !on;
+    drag = null;
+    if (on) { $('edsize').disabled = true; $('edname').textContent = 'Düyməni seçin'; }
+    else { selCtl = null; CTL_IDS.forEach(function (id) { $(id).classList.remove('sel'); }); }
+  }
+  CTL_IDS.forEach(function (id) {
+    var el = $(id);
+    el.addEventListener('pointerdown', function (e) {
+      if (!editMode) return;
+      e.preventDefault();
+      var cfg = ensureCtl(id);
+      selectCtl(id);
+      var r = el.getBoundingClientRect();
+      drag = { id: id, dx: e.clientX - (r.left + r.width / 2), dy: e.clientY - (r.top + r.height / 2) };
+      try { el.setPointerCapture(e.pointerId); } catch (_) {}
+      void cfg;
+    });
+    el.addEventListener('pointermove', function (e) {
+      if (!editMode || !drag || drag.id !== id) return;
+      var cfg = layout[id];
+      cfg.x = clamp((e.clientX - drag.dx) / window.innerWidth, 0.04, 0.96);
+      cfg.y = clamp((e.clientY - drag.dy) / window.innerHeight, 0.04, 0.96);
+      applyCtl(id);
+    });
+    var endDrag = function () { if (drag && drag.id === id) { drag = null; saveLayout(); } };
+    el.addEventListener('pointerup', endDrag);
+    el.addEventListener('pointercancel', endDrag);
+  });
+  $('edsize').addEventListener('input', function () {
+    if (!selCtl) return;
+    ensureCtl(selCtl).s = parseFloat($('edsize').value) || 1;
+    applyCtl(selCtl);
+    saveLayout();
+  });
+  $('edreset').addEventListener('click', resetLayout);
+  $('eddone').addEventListener('click', function () { setEdit(false); });
+
+  /* ---- ayarlar pəncərəsi ---- */
+  function syncSettingsUI() {
+    $('s-sound').checked = settings.sound;
+    $('s-vol').value = settings.volume;
+    $('s-shots').checked = settings.shots;
+    $('s-steps').checked = settings.steps;
+    $('s-hits').checked = settings.hits;
+    $('s-autorun').checked = settings.autorun;
+    $('s-sens').value = settings.sens;
+    $('s-edit').disabled = !joined;
+    $('s-edit-hint').textContent = joined ? 'Düyməni sürüşdürüb yerini, sürgü ilə ölçüsünü dəyişin.' : 'Oyuna qoşulandan sonra mümkündür.';
+  }
+  function openSettings() { syncSettingsUI(); $('settings').hidden = false; }
+  function closeSettings() { $('settings').hidden = true; }
+  [['s-sound', 'sound'], ['s-shots', 'shots'], ['s-steps', 'steps'], ['s-hits', 'hits'], ['s-autorun', 'autorun']].forEach(function (pair) {
+    $(pair[0]).addEventListener('change', function () {
+      settings[pair[1]] = $(pair[0]).checked;
+      if (pair[1] === 'autorun' && !settings.autorun) { auto.on = false; auto.fwdT = 0; }
+      applyAudio();
+      saveSettings();
+    });
+  });
+  $('s-vol').addEventListener('input', function () { settings.volume = parseFloat($('s-vol').value); applyAudio(); saveSettings(); });
+  function setSens(v) {
+    settings.sens = sens = v;
+    $('s-sens').value = v; $('sens').value = v;
+    saveSettings();
+  }
+  $('s-sens').addEventListener('input', function () { setSens(parseFloat($('s-sens').value) || 1); });
+  $('s-test').addEventListener('click', function () { audio(); applyAudio(); shotSound('rifle', 0.45); setTimeout(function () { tone(1200, 0.05, 0.18, 'square'); }, 250); });
+  $('s-edit').addEventListener('click', function () { if (!joined) return; closeSettings(); setEdit(true); });
+  $('s-close').addEventListener('click', closeSettings);
+  $('open-settings').addEventListener('click', openSettings);
+  $('pause-settings').addEventListener('click', function (e) { e.stopPropagation(); openSettings(); });
+  $('gear').addEventListener('click', openSettings);
+  $('gear').addEventListener('touchstart', function (e) { e.preventDefault(); e.stopPropagation(); openSettings(); }, { passive: false });
+  document.addEventListener('keydown', function (e) { if (e.code === 'Escape' && !$('settings').hidden) closeSettings(); });
+
   /* ======================= Lobbi ======================= */
   $('name').value = store.get('arena-name', 'Oyunçu' + (100 + Math.floor(Math.random() * 900)));
-  sens = parseFloat(store.get('arena-sens', '1')) || 1;
   $('sens').value = sens;
   $('fs').checked = store.get('arena-fs', '1') === '1';
   $('fs').addEventListener('change', function () { store.set('arena-fs', $('fs').checked ? '1' : '0'); });
-  $('sens').addEventListener('input', function () { sens = parseFloat($('sens').value) || 1; store.set('arena-sens', String(sens)); });
+  $('sens').addEventListener('input', function () { setSens(parseFloat($('sens').value) || 1); });
   try {
     var q = new URLSearchParams(location.search).get('room');
     if (q) $('room').value = q.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);

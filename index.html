@@ -138,23 +138,23 @@ button.go:active { transform: translateY(3px); box-shadow: 0 1px 0 #a86f00; }
 #tc { position: absolute; inset: 0; pointer-events: none; touch-action: none; }
 #tc > * { pointer-events: auto; touch-action: none; }
 #look { position: absolute; top: 0; bottom: 0; right: 0; width: 58%; z-index: 1; }
-#js { position: absolute; z-index: 2; left: max(26px, env(safe-area-inset-left, 0px)); bottom: max(26px, env(safe-area-inset-bottom, 0px)); width: 140px; height: 140px; border-radius: 50%; background: rgba(255,255,255,.08); border: 2px solid rgba(255,255,255,.28); }
-#jk { position: absolute; left: 42px; top: 42px; width: 56px; height: 56px; border-radius: 50%; background: rgba(255,255,255,.4); border: 2px solid rgba(255,255,255,.6); }
-.tb { position: absolute; z-index: 2; display: grid; place-items: center; width: 64px; height: 64px; border-radius: 50%; font: 700 12px var(--font); letter-spacing: .06em; color: var(--ink); background: rgba(12,18,22,.55); border: 2px solid rgba(255,255,255,.3); text-align: center; -webkit-tap-highlight-color: transparent; }
+#js { position: absolute; z-index: 2; left: max(26px, env(safe-area-inset-left, 0px)); bottom: max(26px, env(safe-area-inset-bottom, 0px)); width: calc(140px * var(--s, 1)); height: calc(140px * var(--s, 1)); border-radius: 50%; background: rgba(255,255,255,.08); border: 2px solid rgba(255,255,255,.28); }
+#jk { position: absolute; left: 30%; top: 30%; width: 40%; height: 40%; border-radius: 50%; background: rgba(255,255,255,.4); border: 2px solid rgba(255,255,255,.6); }
+.tb { position: absolute; z-index: 2; display: grid; place-items: center; width: calc(64px * var(--s, 1)); height: calc(64px * var(--s, 1)); border-radius: 50%; font: 700 calc(12px * var(--s, 1)) var(--font); letter-spacing: .06em; color: var(--ink); background: rgba(12,18,22,.55); border: 2px solid rgba(255,255,255,.3); text-align: center; -webkit-tap-highlight-color: transparent; }
 .tb.on { background: rgba(255,183,3,.55); }
 .tb.active { background: rgba(255,183,3,.75); color: #161200; border-color: var(--amber); }
-.tb.big { width: 96px; height: 96px; font-size: 15px; background: rgba(239,71,111,.5); border-color: rgba(255,255,255,.55); right: max(30px, env(safe-area-inset-right, 0px)); bottom: max(36px, env(safe-area-inset-bottom, 0px)); }
+.tb.big { width: calc(96px * var(--s, 1)); height: calc(96px * var(--s, 1)); font-size: calc(15px * var(--s, 1)); background: rgba(239,71,111,.5); border-color: rgba(255,255,255,.55); right: max(30px, env(safe-area-inset-right, 0px)); bottom: max(36px, env(safe-area-inset-bottom, 0px)); }
 .tb.big.on { background: rgba(239,71,111,.85); }
 #tj { right: calc(max(30px, env(safe-area-inset-right, 0px)) + 112px); bottom: max(52px, env(safe-area-inset-bottom, 0px)); }
 #ta { right: calc(max(30px, env(safe-area-inset-right, 0px)) + 14px); bottom: calc(max(36px, env(safe-area-inset-bottom, 0px)) + 112px); }
 #tr { right: calc(max(30px, env(safe-area-inset-right, 0px)) + 90px); bottom: calc(max(36px, env(safe-area-inset-bottom, 0px)) + 96px); }
 #tcr { right: calc(max(30px, env(safe-area-inset-right, 0px)) + 196px); bottom: calc(max(36px, env(safe-area-inset-bottom, 0px)) + 84px); }
 #ts { left: calc(max(26px, env(safe-area-inset-left, 0px)) + 36px); bottom: calc(max(26px, env(safe-area-inset-bottom, 0px)) + 154px); }
-.tb.small { width: 54px; height: 54px; font-size: 10px; left: max(14px, env(safe-area-inset-left, 0px)); top: 94px; }
+.tb.small { width: calc(54px * var(--s, 1)); height: calc(54px * var(--s, 1)); font-size: calc(10px * var(--s, 1)); left: max(14px, env(safe-area-inset-left, 0px)); top: 94px; }
 #rotate { display: none; z-index: 50; background: rgba(8,12,15,.96); }
 @media (orientation: portrait) { body.touch.ingame #rotate { display: grid; } }
 body.touch { touch-action: none; }
-body.touch .keys, body.touch .chk { display: none; }
+body.touch .keys, body.touch .fschk { display: none; }
 .touchonly { display: none; }
 body.touch .touchonly { display: block; margin-top: 14px; }
 body.touch #hpbox { left: calc(50% - 172px); bottom: 12px; width: 150px; }
@@ -172,6 +172,26 @@ body.touch #msg { top: 22%; font-size: 24px; }
 body.touch #stance { bottom: 74px; font-size: 14px; }
 body.touch #scoreline { font-size: 20px; }
 body.touch #board { max-height: 80vh; overflow: auto; }
+
+.alt { width: 100%; margin-top: 10px; padding: 10px; font: 700 18px var(--font); letter-spacing: .08em; text-transform: uppercase; color: var(--ink); background: rgba(255,255,255,.08); border: 1px solid var(--line); border-radius: 10px; cursor: pointer; }
+.alt:hover { background: rgba(255,255,255,.14); }
+.alt:disabled { opacity: .45; cursor: default; }
+#settings { z-index: 60; background: rgba(8,12,15,.82); }
+#settings .box { width: min(480px, 100%); }
+#settings h2 { margin: 0 0 4px; font-size: 32px; letter-spacing: .06em; text-transform: uppercase; }
+#settings h3 { margin: 18px 0 2px; font-size: 14px; letter-spacing: .16em; text-transform: uppercase; color: var(--amber); }
+#settings .chk { margin: 10px 0 0; font-size: 16px; color: var(--ink); }
+#gear { display: none; position: absolute; top: 12px; right: max(14px, env(safe-area-inset-right, 0px)); z-index: 5; padding: 7px 12px; font: 700 13px var(--font); letter-spacing: .1em; text-transform: uppercase; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; pointer-events: auto; cursor: pointer; }
+body.touch #gear { display: block; }
+#s-touch { display: none; }
+body.touch #s-touch { display: block; }
+body.touch #feed { top: 54px; }
+#editbar { position: fixed; top: 10px; left: 50%; transform: translateX(-50%); z-index: 30; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: center; max-width: 96vw; padding: 8px 12px; font-size: 14px; background: rgba(12,18,22,.94); border: 1px solid var(--amber); border-radius: 10px; pointer-events: auto; }
+#editbar input[type=range] { width: 130px; }
+#editbar button { padding: 6px 12px; font: 700 14px var(--font); letter-spacing: .06em; text-transform: uppercase; color: var(--ink); background: rgba(255,255,255,.1); border: 1px solid var(--line); border-radius: 8px; cursor: pointer; }
+#editbar button.primary { color: #161200; background: var(--amber); border-color: var(--amber); }
+body.editing .tb, body.editing #js { outline: 2px dashed rgba(255,183,3,.75); outline-offset: 3px; cursor: grab; }
+body.editing .sel { outline: 3px solid var(--amber) !important; background-color: rgba(255,183,3,.3); }
 @media (max-width: 520px) { #hpbox { width: 180px; } #hpnum { font-size: 30px; } #ammo { font-size: 36px; } .box h1 { font-size: 36px; } }
 </style>
 </head>
@@ -201,6 +221,14 @@ body.touch #board { max-height: 80vh; overflow: auto; }
   <div id="msg"></div>
   <div id="board" hidden><h3 id="boardtitle">Xal cədvəli</h3><table><thead><tr><th>Oyunçu</th><th></th><th>Öldürmə</th><th>Ölüm</th></tr></thead><tbody id="rows"></tbody></table></div>
   <input id="chat" type="text" maxlength="80" placeholder="Mesaj yaz və Enter bas" hidden autocomplete="off">
+  <div id="gear" role="button">Ayarlar</div>
+  <div id="editbar" hidden>
+    <b>Düymələri sürüşdürün</b>
+    <span id="edname">Düyməni seçin</span>
+    <input type="range" id="edsize" min="0.6" max="1.8" step="0.05" value="1" disabled aria-label="Düymə ölçüsü">
+    <button type="button" id="edreset">Sıfırla</button>
+    <button type="button" id="eddone" class="primary">Hazır</button>
+  </div>
   <div id="tc" hidden>
     <div id="look"></div>
     <div id="js"><div id="jk"></div></div>
@@ -232,9 +260,10 @@ body.touch #board { max-height: 80vh; overflow: auto; }
     </select>
     <label for="sens">Siçan həssaslığı</label>
     <input type="range" id="sens" min="0.3" max="2.5" step="0.05" value="1">
-    <label class="chk"><input type="checkbox" id="fs" checked><span>Tam ekran (Ctrl düymələrinin brauzer qısayolları ilə toqquşmaması üçün açıq saxlayın)</span></label>
+    <label class="chk fschk"><input type="checkbox" id="fs" checked><span>Tam ekran (Ctrl düymələrinin brauzer qısayolları ilə toqquşmaması üçün açıq saxlayın)</span></label>
     <p id="err" role="alert"></p>
     <button class="go" id="go" type="submit">Oyuna qoşul</button>
+    <button class="alt" id="open-settings" type="button">Ayarlar</button>
     <p class="hint touchonly">Telefonda: solda joystik, sağda ekranı sürüşdürərək ətrafa baxın, düymələrlə atəş edin. Telefonu üfüqi tutun.</p>
     <div class="keys">
       <span><b>W A S D</b> hərəkət</span><span><b>Siçan</b> ətrafa bax</span>
@@ -252,7 +281,32 @@ body.touch #board { max-height: 80vh; overflow: auto; }
     <h2>Fasilə</h2>
     <p>Davam etmək üçün ekrana klikləyin</p>
     <button class="go" id="invite" type="button" style="font-size:18px">Dəvət linkini kopyala</button>
+    <button class="alt" id="pause-settings" type="button">Ayarlar</button>
     <p id="invlink" class="hint" style="user-select:text;word-break:break-all"></p>
+  </div>
+</div>
+
+<div id="settings" class="screen" hidden>
+  <div class="box">
+    <h2>Ayarlar</h2>
+    <h3>Səs</h3>
+    <label class="chk"><input type="checkbox" id="s-sound"><span>Səslər açıqdır</span></label>
+    <label for="s-vol">Səs səviyyəsi</label>
+    <input type="range" id="s-vol" min="0" max="1" step="0.05">
+    <label class="chk"><input type="checkbox" id="s-shots"><span>Atəş səsləri</span></label>
+    <label class="chk"><input type="checkbox" id="s-steps"><span>Addım səsləri</span></label>
+    <label class="chk"><input type="checkbox" id="s-hits"><span>Zərbə və xəbərdarlıq səsləri</span></label>
+    <button class="alt" id="s-test" type="button">Səsi yoxla</button>
+    <h3>İdarəetmə</h3>
+    <label for="s-sens">Siçan və toxunma həssaslığı</label>
+    <input type="range" id="s-sens" min="0.3" max="2.5" step="0.05">
+    <label class="chk"><input type="checkbox" id="s-autorun"><span>Avtomatik qaçış: 2 saniyə dayanmadan irəli getsəniz qaçış başlayır. Geri getmək, əyilmək və ya nişan almaq normal yerişə qaytarır.</span></label>
+    <div id="s-touch">
+      <h3>Telefon düymələri</h3>
+      <button class="alt" id="s-edit" type="button">Düymələrin yerini və ölçüsünü dəyiş</button>
+      <p class="hint" id="s-edit-hint"></p>
+    </div>
+    <button class="go" id="s-close" type="button">Hazır</button>
   </div>
 </div>
 

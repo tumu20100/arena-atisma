@@ -52,12 +52,14 @@ Raund bitəndən 8 saniyə sonra yeni oyun avtomatik başlayır.
 | Sol klik | atəş |
 | Sağ klik | nişan almaq (snayperdə durbin) |
 | Boşluq | tullanmaq (alçaq qutuların üstünə çıxmaq olar) |
-| Shift | qaçmaq |
+| Ctrl (basılı saxla) + W | sürətli qaçış |
+| W-ni 2 saniyə basılı saxla | **avtomatik qaçış** (aşağıya bax) |
+| Shift (basılı saxla) | əyilmək: daha yavaş, amma hədəf kiçilir və güllələr üstündən keçə bilər |
 | 1 2 3 4 və ya siçan çarxı | silah dəyişmək |
 | R | doldurmaq |
 | Tab (basılı saxla) | xal cədvəli |
 | Enter | söhbət |
-| Esc | fasilə |
+| Esc | fasilə (buradan Ayarlara girmək olar) |
 
 ## 5. Silahlar
 
@@ -70,7 +72,37 @@ Raund bitəndən 8 saniyə sonra yeni oyun avtomatik başlayır.
 
 Başa vurulan atəş 2 dəfə zədə vurur, uzaq məsafədə zədə azalır. Beş saniyə zədə almasan can yavaş-yavaş bərpa olur.
 
-## 6. Layihənin quruluşu
+## 6. Kask və bədənlik
+
+Hər oyunçu kask (50) və bədənliklə (60) doğulur. Kask başa dəyən zədənin yarısını, bədənlik bədənə dəyən zədənin yarısını udur. Dayanıqlıq bitəndən sonra tam zədə keçir. Ekranın sol aşağısında can çubuğunun altında hər ikisi görünür. Ölüb yenidən doğulanda tam bərpa olur. Birgə rejimdə hər dalğa başlayanda sağ qalanların kaskı və bədənliyi yenilənir. Botlarda kask və bədənlik yoxdur.
+
+### Avtomatik qaçış
+
+2 saniyə fasiləsiz irəli getsəniz, personaj özü qaçmağa başlayır və W-ni buraxsanız da qaçmağa davam edir. Geri getmək istəsəniz (S), əyilsəniz (Shift), nişan alsanız və ya divara dirənsəniz, normal yerişə keçir. Ayarlardan söndürmək olar.
+
+## 6a. Ayarlar
+
+Lobbidə "Ayarlar" düyməsi, oyun içində Esc → Ayarlar (telefonda ⚙ düyməsi):
+
+- Səsləri ümumiyyətlə açıb bağlamaq və ümumi səs səviyyəsi
+- Ayrıca: atəş səsləri, addım səsləri, zərbə/xəbərdarlıq səsləri
+- Siçan həssaslığı
+- Avtomatik qaçışı açıb bağlamaq
+- Telefonda: **düymələrin yerini və ölçüsünü dəyişmək**. "Düymələrin yerini dəyiş" seçin, düyməni barmaqla istədiyiniz yerə sürüşdürün, aşağıdakı çubuqla böyüdün/kiçildin, "Hazır" basın. "Sıfırla" ilkin düzülüşü qaytarır.
+
+Ayarlar brauzerdə yadda qalır.
+
+## 7. Telefonda oynamaq
+
+Telefonun brauzerində eyni linki açın, telefonu **üfüqi** tutun.
+
+- Solda joystik: hərəkət. Sağ tərəfdə ekranı barmaqla sürüşdürün: ətrafa baxmaq.
+- Düymələr: ATƏŞ, TULLAN, NİŞAN (aç/bağla), DOLDUR, ƏYİL (aç/bağla), QAÇ (aç/bağla), CƏDVƏL.
+- Silah dəyişmək üçün yuxarıdakı silah adına toxunun.
+- Android Chrome-da oyun tam ekrana keçir. iPhone-da Safari tam ekranı dəstəkləmir, ən yaxşı nəticə üçün "Paylaş → Ana ekrana əlavə et" ilə quraşdırıb oradan açın.
+- Zəif telefonlarda kölgələr və şəkil keyfiyyəti avtomatik azaldılır.
+
+## 8. Layihənin quruluşu
 
 ```
 server.js          oyun serveri (asılılıqsız: HTTP + WebSocket + oyun qaydaları + botlar)
@@ -81,8 +113,9 @@ public/shared.js   server və brauzerin ortaq istifadə etdiyi xəritə, silahla
 
 **Dəyişdirmək istəyirsənsə:** silahların rəqəmləri (`WEAPONS`) və xəritə (`addBox`, `sym` sətirləri) `public/shared.js` faylındadır. Qalib xalı və otaq ölçüsü `server.js`-in yuxarısındadır. Fayl dəyişəndən sonra serveri yenidən başladın.
 
-## 7. Texniki qeydlər
+## 9. Texniki qeydlər
 
 - Hərəkət oyunçunun öz brauzerində hesablanır, atəş, zədə, öldürmə və xal isə serverdə. Server oyunçunun sürətini yoxlayır, amma bu, ciddi aldatma müdafiəsi deyil. Dost oyunları üçün yetərlidir.
 - Gecikmə kompensasiyası yoxdur. İnternet üzərindən yüksək pinqlə (150 ms-dən çox) vurmaq çətinləşə bilər.
-- Mobil cihazlar dəstəklənmir, yalnız klaviatura və siçan.
+- Ctrl+W brauzer qısayolu olduğu üçün tam ekran açıq olmalıdır (menyudakı qutu). Tam ekranı söndürsəniz, Ctrl+W oyunu yox, brauzer səhifəsini bağlaya bilər.
+- Fayllar GitHub-a `public` qovluğu olmadan, birbaşa kökə yüklənibsə də server işləyir.
