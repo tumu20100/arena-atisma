@@ -10,17 +10,26 @@
   var RADIUS = 0.4;       // oyunçu dairəsinin radiusu
   var CROUCH_EYE = 1.05;  // əyiləndə göz hündürlüyü
   var CROUCH_HEIGHT = 1.25; // əyiləndə bədən hündürlüyü
-  var HELMET_HP = 50;     // kaskın dayanıqlığı
-  var ARMOR_HP = 60;      // bədənliyin dayanıqlığı
   var STEP = 0.5;         // pilləkən kimi çıxıla bilən maksimum hündürlük
 
+  // kask və bədənlik səviyyələri: dayanıqlıq və udduğu zədə payı
+  var HELMETS = [null, { hp: 50, abs: 0.45 }, { hp: 90, abs: 0.6 }, { hp: 130, abs: 0.75 }];
+  var ARMORS = [null, { hp: 60, abs: 0.35 }, { hp: 100, abs: 0.5 }, { hp: 150, abs: 0.65 }];
+
   var WEAPONS = {
-    pistol:  { id: 'pistol',  name: 'Tapança', dmg: 22, rate: 280,  mag: 12, reload: 1300, spread: 0.006,  pellets: 1, range: 80,  auto: false, recoil: 0.022, zoom: 55 },
-    rifle:   { id: 'rifle',   name: 'Avtomat', dmg: 14, rate: 95,   mag: 30, reload: 1900, spread: 0.018,  pellets: 1, range: 100, auto: true,  recoil: 0.012, zoom: 50 },
-    shotgun: { id: 'shotgun', name: 'Pompalı', dmg: 11, rate: 850,  mag: 6,  reload: 2400, spread: 0.07,   pellets: 8, range: 35,  auto: false, recoil: 0.07,  zoom: 60 },
-    sniper:  { id: 'sniper',  name: 'Snayper', dmg: 85, rate: 1300, mag: 5,  reload: 2600, spread: 0.0008, pellets: 1, range: 200, auto: false, recoil: 0.06,  zoom: 18 }
+    pistol:  { id: 'pistol',  name: 'P92',     dmg: 22,  rate: 280,  mag: 12, reload: 1300, spread: 0.006,  pellets: 1, range: 80,  auto: false, recoil: 0.022, zoom: 55, len: 0.7 },
+    deagle:  { id: 'deagle',  name: 'Deagle',  dmg: 46,  rate: 520,  mag: 7,  reload: 1800, spread: 0.007,  pellets: 1, range: 90,  auto: false, recoil: 0.055, zoom: 55, len: 0.8 },
+    uzi:     { id: 'uzi',     name: 'UZI',     dmg: 10,  rate: 62,   mag: 30, reload: 1700, spread: 0.034,  pellets: 1, range: 50,  auto: true,  recoil: 0.007, zoom: 55, len: 0.85 },
+    rifle:   { id: 'rifle',   name: 'M416',    dmg: 14,  rate: 95,   mag: 30, reload: 1900, spread: 0.018,  pellets: 1, range: 100, auto: true,  recoil: 0.012, zoom: 50, len: 1 },
+    akm:     { id: 'akm',     name: 'AKM',     dmg: 19,  rate: 115,  mag: 30, reload: 2100, spread: 0.022,  pellets: 1, range: 100, auto: true,  recoil: 0.02,  zoom: 50, len: 1.05 },
+    dmr:     { id: 'dmr',     name: 'SKS',     dmg: 36,  rate: 230,  mag: 10, reload: 2300, spread: 0.005,  pellets: 1, range: 150, auto: false, recoil: 0.04,  zoom: 35, len: 1.15 },
+    lmg:     { id: 'lmg',     name: 'M249',    dmg: 13,  rate: 80,   mag: 75, reload: 4200, spread: 0.026,  pellets: 1, range: 110, auto: true,  recoil: 0.014, zoom: 50, len: 1.2 },
+    shotgun: { id: 'shotgun', name: 'S12K',    dmg: 11,  rate: 850,  mag: 6,  reload: 2400, spread: 0.07,   pellets: 8, range: 35,  auto: false, recoil: 0.07,  zoom: 60, len: 1.05 },
+    sniper:  { id: 'sniper',  name: 'Kar98k',  dmg: 85,  rate: 1300, mag: 5,  reload: 2600, spread: 0.0008, pellets: 1, range: 200, auto: false, recoil: 0.06,  zoom: 18, len: 1.3 },
+    awm:     { id: 'awm',     name: 'AWM',     dmg: 110, rate: 1700, mag: 5,  reload: 3200, spread: 0.0006, pellets: 1, range: 250, auto: false, recoil: 0.075, zoom: 14, len: 1.4 }
   };
-  var WEAPON_ORDER = ['pistol', 'rifle', 'shotgun', 'sniper'];
+  var WEAPON_ORDER = ['pistol', 'deagle', 'uzi', 'rifle', 'akm', 'dmr', 'lmg', 'shotgun', 'sniper', 'awm'];
+  var MAX_GRENADES = 5, MAX_SMOKES = 3;
 
   /* ---------------- Xəritələr ---------------- */
   var T = 0.4; // ev divarının qalınlığı
@@ -210,8 +219,9 @@
   var cur = ARENA;
 
   /* ---------------- Loot ---------------- */
-  var LOOT_TYPES = ['pistol', 'rifle', 'shotgun', 'sniper', 'helmet', 'armor', 'medkit'];
-  var LOOT_WEIGHTS = [18, 16, 14, 8, 14, 14, 16];
+  var LOOT_TYPES = ['pistol', 'deagle', 'uzi', 'rifle', 'akm', 'dmr', 'lmg', 'shotgun', 'sniper', 'awm',
+    'helmet1', 'helmet2', 'helmet3', 'armor1', 'armor2', 'armor3', 'medkit', 'bandage', 'grenade', 'smoke', 'scope', 'supp'];
+  var LOOT_WEIGHTS = [10, 5, 8, 8, 7, 4, 3, 8, 4, 1.5, 9, 5, 1.5, 9, 5, 1.5, 6, 10, 9, 6, 4, 4];
   function rollLoot(rand) {
     var tot = 0, i;
     for (i = 0; i < LOOT_WEIGHTS.length; i++) tot += LOOT_WEIGHTS[i];
@@ -319,7 +329,7 @@
 
   var api = {
     EYE: EYE, HEIGHT: HEIGHT, RADIUS: RADIUS, STEP: STEP,
-    CROUCH_EYE: CROUCH_EYE, CROUCH_HEIGHT: CROUCH_HEIGHT, HELMET_HP: HELMET_HP, ARMOR_HP: ARMOR_HP,
+    CROUCH_EYE: CROUCH_EYE, CROUCH_HEIGHT: CROUCH_HEIGHT, HELMETS: HELMETS, ARMORS: ARMORS, MAX_GRENADES: MAX_GRENADES, MAX_SMOKES: MAX_SMOKES,
     WEAPONS: WEAPONS, WEAPON_ORDER: WEAPON_ORDER, MAPS: MAPS, LOOT_TYPES: LOOT_TYPES, rollLoot: rollLoot, rng: rng,
     resolve: resolve, groundAt: groundAt, rayBox: rayBox, rayCyl: rayCyl, castWorld: castWorld, clamp: clamp,
     setMap: function (id) {

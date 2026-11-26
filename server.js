@@ -25,6 +25,13 @@ const MODES = ['ffa', 'tdm', 'coop'];
 const LOOT_RESPAWN_MS = 45000;
 const DROP_LIFE_MS = 90000;
 const PICK_R = 1.4;
+const RIFLE = S.WEAPON_ORDER.indexOf('rifle');
+const NADE_FUSE = 3000, SMOKE_FUSE = 1400, SMOKE_MS = 15000, NADE_R = 8, NADE_DMG = 160;
+const noWeapons = () => S.WEAPON_ORDER.map(() => false);
+const allWeapons = () => S.WEAPON_ORDER.map(() => true);
+function invOf(p) {
+  return { own: p.own, hl: p.hl, hm: Math.round(p.helmet), al: p.al, am: Math.round(p.armor), gr: p.gr, sm: p.sm, sc: p.sc, su: p.su, hp: Math.round(p.hp) };
+}
 
 /* ---------------- HTTP (statik fayllar) ---------------- */
 const TYPES = {
@@ -169,6 +176,8 @@ class Room {
     if (mode === 'coop') this.map = S.MAPS.arena; // botlar yalnız arenada
     this.loot = [];
     this.nextLoot = 1;
+    this.nades = [];
+    this.nextNade = 1;
     if (this.map.loot) {
       for (const sp of this.map.lootSpots) {
         this.loot.push({ id: this.nextLoot++, ty: S.rollLoot(Math.random), x: sp[0], z: sp[1], alive: true, at: 0, temp: false });
@@ -204,7 +213,8 @@ class Room {
       id: this.nextId++, conn, name, bot: false, team: null,
       x: 0, y: 0, z: 0, yaw: 0, pitch: 0, hp: 100, alive: false,
       kills: 0, deaths: 0, wi: 0, seq: 0, lastFire: {}, lastState: Date.now(),
-      lastHurt: 0, respawnAt: 0, crouch: false, helmet: 0, armor: 0, own: [true, true, true, true]
+      lastHurt: 0, respawnAt: 0, crouch: false, helmet: 0, armor: 0, hl: 0, al: 0, gr: 0, sm: 0, sc: false, su: false, lastThrow: 0,
+      own: allWeapons()
     };
     if (this.mode === 'tdm') {
       let red = 0, blue = 0;
@@ -260,13 +270,16 @@ class Room {
     const sp = this.pickSpawn();
     p.x = sp[0]; p.z = sp[1]; p.y = 0;
     p.hp = 100; p.alive = true; p.respawnAt = 0;
-    if (this.map.loot) { p.helmet = 0; p.armor = 0; p.own = [false, false, false, false]; }
-    else { p.helmet = S.HELMET_HP; p.armor = S.ARMOR_HP; p.own = [true, true, true, true]; }
+    if (this.map.loot) {
+      p.hl = 0; p.al = 0; p.helmet = 0; p.armor = 0; p.own = noWeapons(); p.gr = 0; p.sm = 0; p.sc = false; p.su = false;
+    } else {
+      p.hl = 2; p.al = 2; p.helmet = S.HELMETS[2].hp; p.armor = S.ARMORS[2].hp; p.own = allWeapons(); p.gr = 2; p.sm = 1; p.sc = false; p.su = false;
+    }
     p.crouch = false;
     p.seq++; p.lastState = Date.now();
     const yaw = Math.atan2(p.x, p.z);
     p.yaw = yaw; p.pitch = 0;
-    p.conn.send({ t: 'spawn', x: p.x, y: p.y, z: p.z, yaw, seq: p.seq, helmet: p.helmet, armor: p.armor, own: p.own });
+    p.conn.send(Object.assign({ t: 'spawn', x: p.x, y: p.y, z: p.z, yaw, seq: p.seq }, invOf(p)));
   }
 
   reset() {
@@ -277,6 +290,7 @@ class Room {
     this.waveAt = 0;
     this.resetLoot();
     for (const p of this.players.values()) { p.kills = 0; p.deaths = 0; this.spawn(p); }
+    this.nades = [];
     this.broadcast({ t: 'reset' });
     this.sendRoster();
   }
@@ -295,11 +309,16 @@ class Room {
     if (!this.map.loot) return;
     const items = [];
     for (let i = S.WEAPON_ORDER.length - 1; i >= 0; i--) if (p.own[i]) { items.push(S.WEAPON_ORDER[i]); break; }
-    if (p.helmet > 0) items.push('helmet');
-    if (p.armor > 0) items.push('armor');
+    if (p.helmet > 0 && p.hl > 0) items.push('helmet' + p.hl);
+    if (p.armor > 0 && p.al > 0) items.push('armor' + p.al);
+    if (p.sc) items.push('scope');
+    if (p.su) items.push('supp');
+    if (p.gr > 0) items.push('grenade');
+    if (p.sm > 0) items.push('smoke');
     items.forEach((ty, k) => {
       const a = (k / Math.max(1, items.length)) * Math.PI * 2 + Math.random();
-      const l = { id: this.nextLoot++, ty, x: S.clamp(p.x + Math.cos(a) * 0.8, -this.map.half + 1, this.map.half - 1), z: S.clamp(p.z + Math.sin(a) * 0.8, -this.map.half + 1, this.map.half - 1), alive: true, at: Date.now() + DROP_LIFE_MS, temp: true };
+      const half = this.map.half;
+      const l = { id: this.nextLoot++, ty, x: S.clamp(p.x + Math.cos(a) * 0.9, -half + 1, half - 1), z: S.clamp(p.z + Math.sin(a) * 0.9, -half + 1, half - 1), alive: true, at: Date.now() + DROP_LIFE_MS, temp: true };
       this.loot.push(l);
       this.broadcast({ t: 'loot', id: l.id, a: 1, ty: l.ty, x: r1(l.x), z: r1(l.z) });
     });
@@ -336,21 +355,122 @@ class Room {
 
   tryPick(p, l) {
     const wi = S.WEAPON_ORDER.indexOf(l.ty);
+    const m = /^(helmet|armor)([123])$/.exec(l.ty);
     if (wi >= 0) {
       if (p.own[wi]) return false;
       p.own[wi] = true;
-    } else if (l.ty === 'helmet') {
-      if (p.helmet >= S.HELMET_HP) return false;
-      p.helmet = S.HELMET_HP;
-    } else if (l.ty === 'armor') {
-      if (p.armor >= S.ARMOR_HP) return false;
-      p.armor = S.ARMOR_HP;
+    } else if (m) {
+      const lv = +m[2];
+      if (m[1] === 'helmet') {
+        const max = S.HELMETS[lv].hp;
+        if (lv < p.hl || (lv === p.hl && p.helmet >= max)) return false;
+        p.hl = lv; p.helmet = max;
+      } else {
+        const max = S.ARMORS[lv].hp;
+        if (lv < p.al || (lv === p.al && p.armor >= max)) return false;
+        p.al = lv; p.armor = max;
+      }
     } else if (l.ty === 'medkit') {
       if (p.hp >= 100) return false;
-      p.hp = Math.min(100, p.hp + 50);
+      p.hp = 100;
+    } else if (l.ty === 'bandage') {
+      if (p.hp >= 100) return false;
+      p.hp = Math.min(100, p.hp + 20);
+    } else if (l.ty === 'grenade') {
+      if (p.gr >= S.MAX_GRENADES) return false;
+      p.gr = Math.min(S.MAX_GRENADES, p.gr + 2);
+    } else if (l.ty === 'smoke') {
+      if (p.sm >= S.MAX_SMOKES) return false;
+      p.sm++;
+    } else if (l.ty === 'scope') {
+      if (p.sc) return false;
+      p.sc = true;
+    } else if (l.ty === 'supp') {
+      if (p.su) return false;
+      p.su = true;
     } else return false;
-    p.conn.send({ t: 'pick', ty: l.ty, hp: Math.round(p.hp), hm: Math.round(p.helmet), am: Math.round(p.armor), own: p.own });
+    p.conn.send(Object.assign({ t: 'pick', ty: l.ty }, invOf(p)));
     return true;
+  }
+
+  /* ---- qumbaralar ---- */
+  handleThrow(p, m) {
+    if (!p.alive || this.state !== 'play') return;
+    const kind = m.k === 'smoke' ? 'smoke' : 'frag';
+    if (kind === 'frag' ? p.gr <= 0 : p.sm <= 0) return;
+    const now = Date.now();
+    if (now - p.lastThrow < 900) return;
+    let dx = Number(m.dx), dy = Number(m.dy), dz = Number(m.dz);
+    if (!isFinite(dx) || !isFinite(dy) || !isFinite(dz)) return;
+    const len = Math.hypot(dx, dy, dz);
+    if (len < 1e-6) return;
+    dx /= len; dy /= len; dz /= len;
+    p.lastThrow = now;
+    if (kind === 'frag') p.gr--; else p.sm--;
+    const eye = p.y + (p.crouch ? S.CROUCH_EYE : S.EYE);
+    let x = p.x + dx * 0.5, y = eye - 0.2 + dy * 0.5, z = p.z + dz * 0.5;
+    if (S.castWorld(p.x, eye, p.z, dx, dy, dz, 0.55, this.map) < 0.55) { x = p.x; y = eye - 0.2; z = p.z; }
+    this.nades.push({ id: this.nextNade++, k: kind, x, y, z, vx: dx * 15, vy: dy * 15 + 3, vz: dz * 15, owner: p, born: now, fuse: kind === 'frag' ? NADE_FUSE : SMOKE_FUSE });
+    p.conn.send(Object.assign({ t: 'inv' }, invOf(p)));
+  }
+
+  updateNades(now) {
+    if (!this.nades.length) return;
+    const dt = TICK / 1000, R = 0.12, half = this.map.half, boxes = this.map.boxes;
+    for (let i = this.nades.length - 1; i >= 0; i--) {
+      const n = this.nades[i];
+      for (let step = 0; step < 2; step++) {
+        const h = dt / 2;
+        n.vy -= 16 * h;
+        n.x += n.vx * h; n.y += n.vy * h; n.z += n.vz * h;
+        if (n.y < R) {
+          n.y = R; n.vy = -n.vy * 0.35; n.vx *= 0.72; n.vz *= 0.72;
+          if (Math.abs(n.vy) < 1) n.vy = 0;
+        }
+        const lim = half - 0.2;
+        if (n.x > lim) { n.x = lim; n.vx *= -0.4; } else if (n.x < -lim) { n.x = -lim; n.vx *= -0.4; }
+        if (n.z > lim) { n.z = lim; n.vz *= -0.4; } else if (n.z < -lim) { n.z = -lim; n.vz *= -0.4; }
+        for (let k = 0; k < boxes.length; k++) {
+          const b = boxes[k];
+          if (n.x <= b.x0 - R || n.x >= b.x1 + R || n.z <= b.z0 - R || n.z >= b.z1 + R || n.y <= b.y0 - R || n.y >= b.y1 + R) continue;
+          const ox = Math.min(n.x - (b.x0 - R), (b.x1 + R) - n.x);
+          const oz = Math.min(n.z - (b.z0 - R), (b.z1 + R) - n.z);
+          const oy = Math.min(n.y - (b.y0 - R), (b.y1 + R) - n.y);
+          if (oy <= ox && oy <= oz) {
+            if (n.y - b.y0 > b.y1 - n.y) n.y = b.y1 + R; else n.y = b.y0 - R;
+            n.vy *= -0.35; n.vx *= 0.8; n.vz *= 0.8;
+          } else if (ox <= oz) {
+            n.x = (n.x - b.cx > 0) ? b.x1 + R : b.x0 - R; n.vx *= -0.4;
+          } else {
+            n.z = (n.z - b.cz > 0) ? b.z1 + R : b.z0 - R; n.vz *= -0.4;
+          }
+        }
+      }
+      if (now - n.born < n.fuse) continue;
+      this.nades.splice(i, 1);
+      if (n.k === 'smoke') {
+        this.broadcast({ t: 'smoke', p: [r1(n.x), r1(n.y), r1(n.z)], ms: SMOKE_MS });
+        continue;
+      }
+      this.broadcast({ t: 'boom', p: [r1(n.x), r1(n.y), r1(n.z)] });
+      const owner = n.owner;
+      for (const e of this.entities()) {
+        if (!(e === owner || this.isEnemy(owner, e))) continue;
+        const cy = e.y + 1.0;
+        const d = Math.hypot(e.x - n.x, cy - n.y, e.z - n.z);
+        if (d > NADE_R) continue;
+        const ux = (e.x - n.x) / (d || 1), uy = (cy - n.y) / (d || 1), uz = (e.z - n.z) / (d || 1);
+        if (d > 0.6 && S.castWorld(n.x, n.y + 0.1, n.z, ux, uy, uz, d, this.map) < d - 0.1) continue;
+        let dmg = NADE_DMG * Math.pow(1 - d / NADE_R, 1.3);
+        if (dmg < 1) continue;
+        let helm = false;
+        if (!e.bot && e.armor > 0 && e.al > 0) {
+          const ab = Math.min(e.armor, dmg * S.ARMORS[e.al].abs);
+          e.armor -= ab; dmg -= ab; helm = true;
+        }
+        this.damage(e, owner, dmg, false, 'grenade', helm);
+      }
+    }
   }
 
   end(text) {
@@ -410,15 +530,15 @@ class Room {
         const fall = bestT <= half ? 1 : Math.max(0.6, 1 - 0.4 * ((bestT - half) / half));
         let dmg = w.dmg * fall * (head ? 2 : 1);
         const h = hits.get(best) || { dmg: 0, head: false, helm: false };
-        if (head && !best.bot && best.helmet > 0) {
-          // kask zədənin yarısını udur, dayanıqlığı bitənə qədər
-          const absorbed = Math.min(best.helmet, dmg * 0.5);
+        if (head && !best.bot && best.helmet > 0 && best.hl > 0) {
+          // kask zədənin bir hissəsini udur, dayanıqlığı bitənə qədər
+          const absorbed = Math.min(best.helmet, dmg * S.HELMETS[best.hl].abs);
           best.helmet -= absorbed;
           dmg -= absorbed;
           h.helm = true;
-        } else if (!head && !best.bot && best.armor > 0) {
-          // bədənlik bədənə dəyən zədənin yarısını udur
-          const absorbed = Math.min(best.armor, dmg * 0.5);
+        } else if (!head && !best.bot && best.armor > 0 && best.al > 0) {
+          // bədənlik bədənə dəyən zədənin bir hissəsini udur
+          const absorbed = Math.min(best.armor, dmg * S.ARMORS[best.al].abs);
           best.armor -= absorbed;
           dmg -= absorbed;
           h.helm = true;
@@ -428,7 +548,13 @@ class Room {
       }
       ends.push([r1(ox + rx * bestT), r1(oy + ry * bestT), r1(oz + rz * bestT)]);
     }
-    this.broadcast({ t: 'shot', id: p.id, w: p.wi, o: [r2(ox), r2(oy), r2(oz)], e: ends });
+    const shotMsg = { t: 'shot', id: p.id, w: p.wi, o: [r2(ox), r2(oy), r2(oz)], e: ends };
+    if (p.su) {
+      // susdurucu: atəşi yalnız yaxındakılar görür/eşidir
+      shotMsg.s = 1;
+      const s = JSON.stringify(shotMsg);
+      for (const q of this.players.values()) if (q === p || Math.hypot(q.x - p.x, q.z - p.z) < 28) q.conn.sendRaw(s);
+    } else this.broadcast(shotMsg);
     for (const [victim, h] of hits) this.damage(victim, p, h.dmg, h.head, w.id, h.helm);
   }
 
@@ -479,7 +605,7 @@ class Room {
     if (this.waveAt && now >= this.waveAt) {
       this.waveAt = 0;
       this.wave++;
-      for (const p of this.players.values()) { if (!p.alive) this.spawn(p); else { p.helmet = S.HELMET_HP; p.armor = S.ARMOR_HP; } }
+      for (const p of this.players.values()) { if (!p.alive) this.spawn(p); else { p.helmet = S.HELMETS[p.hl || 2].hp; p.armor = S.ARMORS[p.al || 2].hp; p.gr = Math.max(p.gr, 2); p.sm = Math.max(p.sm, 1); p.conn.send(Object.assign({ t: 'inv' }, invOf(p))); } }
       const count = Math.min(30, 3 + this.wave * 2);
       for (let i = 0; i < count; i++) this.spawnBot();
       this.broadcast({ t: 'wave', n: this.wave, bots: count });
@@ -491,7 +617,7 @@ class Room {
     const b = {
       id: this.nextBotId++, bot: true, name: 'Bot', team: 'bot',
       x: sp[0] + (Math.random() - 0.5) * 3, y: 0, z: sp[1] + (Math.random() - 0.5) * 3,
-      yaw: 0, pitch: 0, hp: Math.min(100, 50 + this.wave * 8), alive: true, wi: 1,
+      yaw: 0, pitch: 0, hp: Math.min(100, 50 + this.wave * 8), alive: true, wi: RIFLE,
       kills: 0, deaths: 0, nextShot: Date.now() + 1500 + Math.random() * 1500, strafe: Math.random() * 6
     };
     S.resolve(b, this.map);
@@ -560,7 +686,7 @@ class Room {
           const ex = hit ? tx : tx + (Math.random() - 0.5) * 2.5;
           const ey = hit ? ty : ty + (Math.random() - 0.5) * 1.5;
           const ez = hit ? tz : tz + (Math.random() - 0.5) * 2.5;
-          this.broadcast({ t: 'shot', id: b.id, w: 1, o: [r2(ox), r2(oy), r2(oz)], e: [[r1(ex), r1(ey), r1(ez)]] });
+          this.broadcast({ t: 'shot', id: b.id, w: RIFLE, o: [r2(ox), r2(oy), r2(oz)], e: [[r1(ex), r1(ey), r1(ez)]] });
           if (hit) this.damage(target, b, Math.min(18, 8 + this.wave), false, 'rifle');
         } else {
           b.nextShot = now + 250;
@@ -578,6 +704,7 @@ class Room {
       this.coopLogic(now);
       this.updateBots(now);
       this.updateLoot(now);
+      this.updateNades(now);
       for (const p of this.players.values()) {
         if (!p.alive && p.respawnAt && now >= p.respawnAt) this.spawn(p);
       }
@@ -592,10 +719,11 @@ class Room {
       arr.push([p.id, r2(p.x), r2(p.y), r2(p.z), r2(p.yaw), r2(p.pitch), Math.round(p.hp), p.wi, (p.alive ? 1 : 0) | (p.crouch ? 4 : 0) | (p.own.some(Boolean) ? 0 : 8), Math.round(p.helmet), Math.round(p.armor)]);
     }
     for (const b of this.bots) {
-      arr.push([b.id, r2(b.x), r2(b.y), r2(b.z), r2(b.yaw), 0, Math.round(b.hp), 1, 3]);
+      arr.push([b.id, r2(b.x), r2(b.y), r2(b.z), r2(b.yaw), 0, Math.round(b.hp), RIFLE, 3]);
     }
+    const gl = this.nades.map((n) => [n.id, n.k === 'frag' ? 0 : 1, r2(n.x), r2(n.y), r2(n.z)]);
     this.broadcast({
-      t: 'snap', p: arr,
+      t: 'snap', p: arr, g: gl,
       m: { s: this.state, r: this.score.red, b: this.score.blue, wv: this.wave, bots: this.bots.length }
     });
   }
@@ -651,6 +779,8 @@ function onMessage(conn, raw) {
     const wi = m.wi | 0;
     if (wi >= 0 && wi < S.WEAPON_ORDER.length && p.own[wi]) p.wi = wi;
     p.crouch = m.c === 1;
+  } else if (m.t === 'throw') {
+    room.handleThrow(p, m);
   } else if (m.t === 'shoot') {
     room.handleShoot(p, m);
   } else if (m.t === 'chat') {

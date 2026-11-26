@@ -602,12 +602,19 @@
   var auto = { fwdT: 0, on: false, blockT: 0 };
   var editMode = false;
   var me = {
-    id: 0, alive: false, hp: 100, helmet: S.HELMET_HP, armor: S.ARMOR_HP, x: 0, y: 0, z: 0, vx: 0, vz: 0, vy: 0, yaw: 0, pitch: 0,
-    onGround: true, seq: 0, wi: 1, own: [true, true, true, true], ammo: [], reloading: false, reloadStart: 0, reloadEnd: 0,
+    id: 0, alive: false, hp: 100, helmet: 0, armor: 0, hl: 0, al: 0, gr: 0, sm: 0, sc: false, su: false, lastThrow: -1e9, x: 0, y: 0, z: 0, vx: 0, vz: 0, vy: 0, yaw: 0, pitch: 0,
+    onGround: true, seq: 0, wi: 1, own: ORDER.map(function () { return true; }), ammo: [], reloading: false, reloadStart: 0, reloadEnd: 0,
     lastFire: 0, switchEnd: 0, fireHeld: false, fireFresh: false, ads: false, kick: 0, shake: 0, deadT: 0,
     eye: S.EYE, crouch: false, sprint: false, stepAcc: 0
   };
-  function anyOwn() { return me.own[0] || me.own[1] || me.own[2] || me.own[3]; }
+  var RIFLE = ORDER.indexOf('rifle');
+  function anyOwn() { return me.own.some(function (v) { return v; }); }
+  function applyInv(m) {
+    if (m.own) me.own = m.own;
+    me.hl = m.hl | 0; me.helmet = m.hm || 0; me.al = m.al | 0; me.armor = m.am || 0;
+    me.gr = m.gr | 0; me.sm = m.sm | 0; me.sc = !!m.sc; me.su = !!m.su;
+    if (m.hp != null) me.hp = m.hp;
+  }
   function refill() { me.ammo = ORDER.map(function (id) { return W[id].mag; }); me.reloading = false; }
   refill();
 
@@ -634,7 +641,10 @@
   }
   var SHOT_SND = {
     pistol: { f: 2400, d: 0.16, low: 140 }, rifle: { f: 1900, d: 0.14, low: 110 },
-    shotgun: { f: 1200, d: 0.38, low: 70 }, sniper: { f: 1500, d: 0.6, low: 55 }
+    shotgun: { f: 1200, d: 0.38, low: 70 }, sniper: { f: 1500, d: 0.6, low: 55 },
+    deagle: { f: 1800, d: 0.28, low: 90 }, uzi: { f: 2600, d: 0.1, low: 150 }, akm: { f: 1500, d: 0.17, low: 95 },
+    dmr: { f: 1400, d: 0.3, low: 75 }, lmg: { f: 1300, d: 0.16, low: 85 }, awm: { f: 1300, d: 0.8, low: 48 },
+    boom: { f: 700, d: 1.0, low: 42 }
   };
   function shotSound(wid, vol) {
     if (!settings.sound || !settings.shots) return;
@@ -710,9 +720,16 @@
     s.rotation.y = Math.atan2(dx, dz);
     s.rotation.x = -Math.asin(dy / l);
   }
+  var VMOD = {
+    pistol: { m: 'pistol', s: [1, 1, 1] }, deagle: { m: 'pistol', s: [1.2, 1.25, 1.2] },
+    uzi: { m: 'rifle', s: [0.9, 0.9, 0.62] }, rifle: { m: 'rifle', s: [1, 1, 1] }, akm: { m: 'rifle', s: [1.05, 1.05, 1.08] },
+    dmr: { m: 'rifle', s: [1, 1, 1.25] }, lmg: { m: 'rifle', s: [1.25, 1.3, 1.1] }, shotgun: { m: 'shotgun', s: [1, 1, 1] },
+    sniper: { m: 'sniper', s: [1, 1, 1] }, awm: { m: 'sniper', s: [1.15, 1.15, 1.2] }
+  };
   function buildVM(id) {
     var g = new THREE.Group(), mz;
-    if (id === 'pistol') {
+    var spec = VMOD[id] || VMOD.rifle, model = spec.m;
+    if (model === 'pistol') {
       part(g, 0.058, 0.065, 0.3, 0, 0.03, -0.1, VM.metal);
       part(g, 0.05, 0.04, 0.26, 0, -0.015, -0.08, VM.dark);
       cyl(g, 0.014, 0.05, 0, 0.03, -0.26, VM.steel);
@@ -723,7 +740,7 @@
       hand(g, 0.0, -0.09, 0.04, 1);
       hand(g, -0.05, -0.085, 0.045, -1);
       mz = -0.3;
-    } else if (id === 'rifle') {
+    } else if (model === 'rifle') {
       part(g, 0.07, 0.095, 0.34, 0, 0, -0.02, VM.metal);
       part(g, 0.075, 0.08, 0.3, 0, -0.005, -0.33, VM.poly);
       part(g, 0.03, 0.015, 0.34, 0, 0.052, -0.2, VM.dark);
@@ -737,7 +754,7 @@
       hand(g, 0.0, -0.11, 0.1, 1);
       hand(g, 0.0, -0.07, -0.34, -1, true);
       mz = -0.78;
-    } else if (id === 'shotgun') {
+    } else if (model === 'shotgun') {
       cyl(g, 0.02, 0.72, 0, 0.025, -0.3, VM.dark);
       cyl(g, 0.017, 0.5, 0, -0.012, -0.25, VM.steel);
       part(g, 0.075, 0.065, 0.2, 0, -0.025, -0.27, VM.wood);
@@ -775,6 +792,7 @@
     var muzzle = new THREE.Object3D();
     muzzle.position.set(0, 0.02, mz);
     g.add(muzzle);
+    g.scale.set(spec.s[0], spec.s[1], spec.s[2]);
     g.visible = false;
     return { g: g, flash: flash, muzzle: muzzle };
   }
@@ -880,7 +898,7 @@
     var r = {
       id: id, bot: bot, group: g, bodyMat: bodyMat, aim: aim, legL: legL, legR: legR, gun: gun, helmet: helmet,
       tag: null, tagKey: '', buf: [], alive: true, diedAt: 0, dyingUntil: 0, seen: 0, walkT: 0, lx: 0, lz: 0, hp: 100,
-      crouch: false, cr: 0, hm: S.HELMET_HP, wi: 1
+      crouch: false, cr: 0, hm: 50, wi: RIFLE
     };
     refreshLook(r);
     return r;
@@ -909,7 +927,6 @@
     if (d < -Math.PI) d += Math.PI * 2;
     return d;
   }
-  var GUN_LEN = [0.7, 1, 1.05, 1.3];
   function updateRemote(r, rt, dt, now) {
     var b = r.buf;
     if (!b.length) return;
@@ -933,7 +950,7 @@
     // əyilmə: gövdə alçalır
     r.cr += ((r.crouch ? 1 : 0) - r.cr) * Math.min(1, dt * 10);
     r.group.scale.y = 1 - r.cr * 0.3;
-    r.gun.scale.z = GUN_LEN[r.wi] || 1;
+    r.gun.scale.z = (W[ORDER[r.wi]] || { len: 1 }).len;
     r.gun.visible = r.armed !== false;
     r.helmet.visible = r.bot || r.hm > 0;
     if (r.tag) r.tag.scale.set(1.6, 0.4 / r.group.scale.y, 1);
@@ -1036,7 +1053,8 @@
   var slotsEl = $('slots');
   ORDER.forEach(function (id, i) {
     var s = document.createElement('span');
-    s.textContent = (i + 1) + ' ' + W[id].name;
+    s.textContent = String((i + 1) % 10);
+    s.title = W[id].name;
     slotsEl.appendChild(s);
   });
 
@@ -1057,13 +1075,19 @@
     fill.style.width = hp + '%';
     fill.style.background = hp > 60 ? 'var(--green)' : hp > 30 ? 'var(--amber)' : 'var(--red)';
     var hm = Math.max(0, Math.round(me.helmet));
-    setText('helmtxt', hm > 0 ? 'KASK ' + hm : 'KASK YOXDUR');
-    $('helmfill').style.width = (hm / S.HELMET_HP * 100) + '%';
+    setText('helmtxt', hm > 0 ? 'KASK ' + me.hl + ' · ' + hm : 'KASK YOXDUR');
+    $('helmfill').style.width = (hm / (S.HELMETS[me.hl || 1].hp) * 100) + '%';
     $('helmbar').classList.toggle('gone', hm <= 0);
     var am = Math.max(0, Math.round(me.armor));
-    setText('armtxt', am > 0 ? 'BƏDƏNLİK ' + am : 'BƏDƏNLİK YOXDUR');
-    $('armfill').style.width = (am / S.ARMOR_HP * 100) + '%';
+    setText('armtxt', am > 0 ? 'BƏDƏNLİK ' + me.al + ' · ' + am : 'BƏDƏNLİK YOXDUR');
+    $('armfill').style.width = (am / (S.ARMORS[me.al || 1].hp) * 100) + '%';
     $('armbar').classList.toggle('gone', am <= 0);
+    var inv = [];
+    inv.push((IS_TOUCH ? '' : 'G ') + 'Qumbara ' + me.gr);
+    inv.push((IS_TOUCH ? '' : 'H ') + 'Tüstü ' + me.sm);
+    if (me.sc) inv.push('Durbin');
+    if (me.su) inv.push('Susdurucu');
+    setText('inv', inv.join(' · '));
     if (IS_TOUCH) $('ta').classList.toggle('active', me.ads);
     setText('stance', !me.alive ? '' : me.crouch ? 'ƏYİLİB' : me.sprint ? (auto.on ? 'QAÇIR (AVTO)' : 'QAÇIR') : '');
   }
@@ -1147,8 +1171,19 @@
 
 
   /* ======================= Loot (yerdəki əşyalar) ======================= */
-  var LOOT_NAME = { pistol: 'Tapança', rifle: 'Avtomat', shotgun: 'Pompalı', sniper: 'Snayper', helmet: 'Kask', armor: 'Bədənlik', medkit: 'Tibbi çanta' };
-  var LOOT_COL = { pistol: 0xc9ced4, rifle: 0x8fb35a, shotgun: 0xe0a255, sniper: 0x4fc3bd, helmet: 0xa4c85a, armor: 0x4f86e8, medkit: 0xff5a5a };
+  var LOOT_COL = {
+    pistol: 0xc9ced4, deagle: 0xe8d27a, uzi: 0xd0a060, rifle: 0x8fb35a, akm: 0xc58b4a, dmr: 0x66b8d8, lmg: 0xd96a5a,
+    shotgun: 0xe0a255, sniper: 0x4fc3bd, awm: 0xc07cf0, helmet1: 0xa4c85a, helmet2: 0x4f9fe8, helmet3: 0xe8a23a,
+    armor1: 0xa4c85a, armor2: 0x4f9fe8, armor3: 0xe8a23a, medkit: 0xff5a5a, bandage: 0xffd0d0, grenade: 0x7fbf5a,
+    smoke: 0xcfd6dc, scope: 0x5ad0ff, supp: 0xb0b0ff
+  };
+  var LOOT_LABEL = { medkit: 'Tibbi çanta', bandage: 'Bandaj', grenade: 'Qumbara', smoke: 'Tüstü qumbarası', scope: 'Durbin', supp: 'Susdurucu' };
+  function lootName(ty) {
+    if (W[ty]) return W[ty].name;
+    var m = /^(helmet|armor)([123])$/.exec(ty);
+    if (m) return (m[1] === 'helmet' ? 'Kask' : 'Bədənlik') + ' ' + m[2] + '-ci səviyyə';
+    return LOOT_LABEL[ty] || ty;
+  }
   var lootGroup = new THREE.Group();
   scene.add(lootGroup);
   var lootItems = new Map();
@@ -1162,7 +1197,12 @@
     strap: new THREE.BoxGeometry(0.1, 0.58, 0.22),
     kit: new THREE.BoxGeometry(0.46, 0.3, 0.3),
     crossA: new THREE.BoxGeometry(0.28, 0.07, 0.31),
-    crossB: new THREE.BoxGeometry(0.07, 0.28, 0.31)
+    crossB: new THREE.BoxGeometry(0.07, 0.28, 0.31),
+    ball: new THREE.SphereGeometry(0.13, 10, 8),
+    can: new THREE.CylinderGeometry(0.1, 0.1, 0.34, 10),
+    tube: new THREE.CylinderGeometry(0.05, 0.05, 0.5, 8),
+    lens: new THREE.CylinderGeometry(0.075, 0.075, 0.3, 10),
+    roll: new THREE.CylinderGeometry(0.1, 0.1, 0.18, 10)
   };
   var LM = {};
   function lootMat(c) {
@@ -1182,21 +1222,39 @@
     var item = new THREE.Group();
     var wi = ORDER.indexOf(ty);
     function part(geo, mat, px, py, pz) { var m = new THREE.Mesh(geo, mat); m.position.set(px, py, pz); item.add(m); return m; }
+    var lv = 0, base = ty;
+    var mm = /^(helmet|armor)([123])$/.exec(ty);
+    if (mm) { base = mm[1]; lv = +mm[2]; }
     if (wi >= 0) {
-      var len = GUN_LEN[wi] || 1;
+      var len = W[ty].len;
       var body = part(LG.body, lootMat(col), 0, 0, 0); body.scale.z = len;
       part(LG.barrel, lootDark, 0, 0.02, -0.45 * len).scale.z = len;
       part(LG.grip, lootDark, 0, -0.14, 0.18 * len);
-      item.rotation.z = 0.0;
-    } else if (ty === 'helmet') {
+    } else if (base === 'helmet') {
       var hm = part(AV.helmet, lootMat(col), 0, -0.05, 0); hm.scale.set(1.9, 1.9, 1.9);
-      part(LG.strap, lootDark, 0, 0, 0).visible = false;
-    } else if (ty === 'armor') {
+      for (var k = 0; k < lv; k++) part(LG.crossA, lootDark, 0, 0.18 + k * 0.04, 0).scale.set(0.35, 0.3, 0.8);
+    } else if (base === 'armor') {
       part(LG.vest, lootMat(col), 0, 0, 0);
       part(LG.strap, lootDark, -0.17, 0, 0); part(LG.strap, lootDark, 0.17, 0, 0);
+      for (var k2 = 0; k2 < lv; k2++) part(LG.crossA, lootDark, 0, 0.32 + k2 * 0.06, 0).scale.set(0.5, 0.4, 0.7);
     } else if (ty === 'medkit') {
       part(LG.kit, lootMat(0xf4f4f4), 0, 0, 0);
       part(LG.crossA, lootMat(0xff3b3b), 0, 0, 0); part(LG.crossB, lootMat(0xff3b3b), 0, 0, 0);
+    } else if (ty === 'bandage') {
+      part(LG.roll, lootMat(0xf4f4f4), 0, 0, 0).rotation.x = Math.PI / 2;
+      part(LG.roll, lootMat(0xff3b3b), 0, 0, 0).scale.set(1.02, 0.35, 1.02);
+    } else if (ty === 'grenade') {
+      part(LG.ball, lootMat(0x4b5a36), 0, 0, 0);
+      part(LG.grip, lootDark, 0, 0.14, 0).scale.set(0.5, 0.35, 0.8);
+    } else if (ty === 'smoke') {
+      part(LG.can, lootMat(0xb9c0c6), 0, 0, 0);
+      part(LG.grip, lootDark, 0, 0.2, 0).scale.set(0.5, 0.3, 0.8);
+    } else if (ty === 'scope') {
+      part(LG.lens, lootDark, 0, 0, 0).rotation.x = Math.PI / 2;
+      part(LG.lens, lootMat(0x5ad0ff), 0, 0, -0.16).scale.set(0.8, 0.05, 0.8);
+    } else if (ty === 'supp') {
+      part(LG.tube, lootDark, 0, 0, 0).rotation.x = Math.PI / 2;
+      part(LG.tube, lootMat(0x8080c0), 0, 0, 0.1).scale.set(1.2, 0.15, 1.2);
     }
     item.scale.set(1.3, 1.3, 1.3);
     g.add(item);
@@ -1229,6 +1287,99 @@
     });
   }
 
+
+  /* ======================= Qumbaralar, partlayış, tüstü ======================= */
+  var nadeMeshes = new Map();
+  var gNade = new THREE.SphereGeometry(0.1, 8, 6);
+  var mFrag = new THREE.MeshLambertMaterial({ color: 0x4b5a36 });
+  var mSmokeG = new THREE.MeshLambertMaterial({ color: 0xb9c0c6 });
+  function syncNades(list) {
+    var seen = {};
+    for (var i = 0; i < list.length; i++) {
+      var n = list[i], id = n[0];
+      seen[id] = true;
+      var o = nadeMeshes.get(id);
+      if (!o) {
+        var m = new THREE.Mesh(gNade, n[1] === 0 ? mFrag : mSmokeG);
+        m.position.set(n[2], n[3], n[4]);
+        m.castShadow = true;
+        scene.add(m);
+        o = { m: m, x: n[2], y: n[3], z: n[4] };
+        nadeMeshes.set(id, o);
+      }
+      o.x = n[2]; o.y = n[3]; o.z = n[4];
+    }
+    nadeMeshes.forEach(function (o, id) {
+      if (!seen[id]) { scene.remove(o.m); nadeMeshes.delete(id); }
+    });
+  }
+  function updateNadeMeshes() {
+    nadeMeshes.forEach(function (o) {
+      o.m.position.x += (o.x - o.m.position.x) * 0.45;
+      o.m.position.y += (o.y - o.m.position.y) * 0.45;
+      o.m.position.z += (o.z - o.m.position.z) * 0.45;
+    });
+  }
+
+  var booms = [], smokes = [];
+  var gBoom = new THREE.SphereGeometry(1, 14, 10);
+  var smokeTex = softTex('rgba(205,210,214,1)', 'rgba(205,210,214,0)');
+  function throwNade(kind) {
+    if (!joined || !me.alive || !locked() || chatting()) return;
+    if (kind === 'frag' ? me.gr <= 0 : me.sm <= 0) return;
+    var now = performance.now();
+    if (now - me.lastThrow < 900) return;
+    me.lastThrow = now;
+    var cp = Math.cos(me.pitch);
+    send({ t: 'throw', k: kind, dx: -Math.sin(me.yaw) * cp, dy: Math.sin(me.pitch), dz: -Math.cos(me.yaw) * cp });
+    tone(260, 0.14, 0.15, 'sine');
+  }
+  function addBoom(p, now) {
+    var mat = new THREE.MeshBasicMaterial({ color: 0xffa640, transparent: true, opacity: 0.9, depthWrite: false, blending: THREE.AdditiveBlending });
+    var m = new THREE.Mesh(gBoom, mat);
+    m.position.set(p[0], p[1] + 0.4, p[2]);
+    scene.add(m);
+    booms.push({ m: m, mat: mat, t0: now });
+    flashLight.position.set(p[0], p[1] + 1.2, p[2]);
+    flashLightUntil = now + 160;
+    for (var i = 0; i < 5; i++) puff(new THREE.Vector3(p[0] + (Math.random() - 0.5) * 3, p[1] + 0.3 + Math.random() * 1.5, p[2] + (Math.random() - 0.5) * 3), now);
+    var d = Math.hypot(p[0] - me.x, p[2] - me.z);
+    shotSound('boom', clamp(1 - d / 110, 0, 1) * 0.9);
+    if (d < 14 && me.alive) me.shake = Math.max(me.shake, 0.5 * (1 - d / 14));
+  }
+  function addSmoke(p, ms, now) {
+    var mat = new THREE.SpriteMaterial({ map: smokeTex, transparent: true, opacity: 0.93, depthWrite: false });
+    var sprites = [];
+    for (var i = 0; i < 16; i++) {
+      var sp = new THREE.Sprite(mat);
+      sp.position.set(p[0] + (Math.random() - 0.5) * 3.6, p[1] + 0.6 + Math.random() * 2.6, p[2] + (Math.random() - 0.5) * 3.6);
+      sp.scale.set(0.5, 0.5, 1);
+      scene.add(sp);
+      sprites.push({ sp: sp, size: 4 + Math.random() * 3 });
+    }
+    smokes.push({ mat: mat, sprites: sprites, t0: now, ms: ms });
+    shotSound('pistol', 0.12);
+  }
+  function updateEffects2(now) {
+    for (var i = booms.length - 1; i >= 0; i--) {
+      var b = booms[i], p = (now - b.t0) / 450;
+      if (p >= 1) { scene.remove(b.m); b.mat.dispose(); booms.splice(i, 1); continue; }
+      var sc = 1 + p * 6.5;
+      b.m.scale.set(sc, sc, sc);
+      b.mat.opacity = 0.9 * (1 - p);
+    }
+    for (var j = smokes.length - 1; j >= 0; j--) {
+      var sm = smokes[j], age = now - sm.t0;
+      if (age >= sm.ms) {
+        sm.sprites.forEach(function (o) { scene.remove(o.sp); });
+        sm.mat.dispose(); smokes.splice(j, 1); continue;
+      }
+      var grow = Math.min(1, age / 1800);
+      sm.sprites.forEach(function (o) { var k = o.size * (0.2 + 0.8 * grow); o.sp.scale.set(k, k, 1); });
+      sm.mat.opacity = 0.93 * Math.min(1, (sm.ms - age) / 3500);
+    }
+  }
+
   /* ======================= Şəbəkə ======================= */
   function send(o) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); }
 
@@ -1258,15 +1409,13 @@
       me.x = m.x; me.y = m.y; me.z = m.z; me.yaw = m.yaw; me.pitch = 0;
       me.vx = me.vz = me.vy = 0; me.onGround = true;
       me.seq = m.seq; me.hp = 100; me.alive = true;
-      me.helmet = m.helmet != null ? m.helmet : S.HELMET_HP;
-      me.armor = m.armor != null ? m.armor : S.ARMOR_HP;
+      applyInv(m);
       me.crouch = false; me.eye = S.EYE;
       tc.crouch = false; tc.sprint = false;
       auto.on = false; auto.fwdT = 0; auto.blockT = 0;
       if (IS_TOUCH) { $('tcr').classList.remove('active'); $('ts').classList.remove('active'); }
       refill();
-      me.own = m.own || [true, true, true, true];
-      me.wi = me.own[1] ? 1 : Math.max(0, me.own.indexOf(true));
+      me.wi = me.own[RIFLE] ? RIFLE : Math.max(0, me.own.indexOf(true));
       me.switchEnd = 0;
       clearMsg();
       if (!ended) $('board').hidden = !boardHeld;
@@ -1307,6 +1456,7 @@
       remotes.forEach(function (r) {
         if (!seen[r.id] && now > r.dyingUntil) removeRemote(r);
       });
+      syncNades(m.g || []);
       updateScoreline();
     },
     shot: function (m) {
@@ -1324,11 +1474,10 @@
             r.group.position.z - Math.cos(r.group.rotation.y) * 0.6);
         }
         var dist = o.distanceTo(camera.position);
-        shotSound(wid, clamp(1 - dist / 70, 0, 1) * 0.5);
-        spark(start, now, 1.4);
+        shotSound(wid, clamp(1 - dist / (m.s ? 25 : 70), 0, 1) * (m.s ? 0.2 : 0.5));
+        if (!m.s) spark(start, now, 1.4);
       }
-      flashLight.position.copy(start);
-      flashLightUntil = now + 55;
+      if (!m.s && !(m.id === me.id && me.su)) { flashLight.position.copy(start); flashLightUntil = now + 55; }
       for (var i = 0; i < m.e.length; i++) {
         var end = new THREE.Vector3(m.e[i][0], m.e[i][1], m.e[i][2]);
         tracer(start, end, now);
@@ -1352,7 +1501,7 @@
       tone(110, 0.18, 0.3, 'sawtooth');
     },
     kill: function (m) {
-      var wname = (W[m.w] && W[m.w].name) || '';
+      var wname = (W[m.w] && W[m.w].name) || (m.w === 'grenade' ? 'Qumbara' : '');
       var text = nameOf(m.k) + '  [' + wname + (m.head ? ' ◎' : '') + ']  ' + nameOf(m.v);
       addFeed(text, (m.k === me.id || m.v === me.id) ? 'me' : '');
       var r = remotes.get(m.v);
@@ -1371,21 +1520,23 @@
     wave: function (m) {
       showMsg('Dalğa ' + m.n, m.bots + ' bot gəlir', 3000);
       tone(220, 0.4, 0.25, 'sawtooth');
-      if (me.alive) { me.helmet = S.HELMET_HP; me.armor = S.ARMOR_HP; }
     },
     loot: function (m) { if (m.a) addLoot(m.id, m.ty, m.x, m.z); else removeLoot(m.id); },
     lootall: function (m) { clearLoot(); m.loot.forEach(function (l) { addLoot(l[0], l[1], l[2], l[3]); }); },
     pick: function (m) {
       var wi = ORDER.indexOf(m.ty), wasArmed = anyOwn();
-      me.own = m.own; me.hp = m.hp; me.helmet = m.hm; me.armor = m.am;
+      applyInv(m);
       if (wi >= 0) {
         me.ammo[wi] = W[m.ty].mag;
         if (!wasArmed) { me.wi = wi; me.reloading = false; me.switchEnd = performance.now() + 250; }
       }
-      showMsg((LOOT_NAME[m.ty] || '') + ' götürüldü', '', 1400);
+      showMsg(lootName(m.ty) + ' götürüldü', '', 1400);
       tone(660, 0.08, 0.2, 'triangle');
       tone(990, 0.12, 0.2, 'triangle');
     },
+    inv: function (m) { applyInv(m); },
+    boom: function (m) { addBoom(m.p, performance.now()); },
+    smoke: function (m) { addSmoke(m.p, m.ms, performance.now()); },
     msg: function (m) { showMsg(m.text, '', 3500); },
     end: function (m) {
       ended = true;
@@ -1498,7 +1649,9 @@
     if (e.code === 'Tab') { boardHeld = true; updateBoardVisibility(); }
     else if (e.code === 'KeyR') startReload(performance.now());
     else if (e.code === 'Enter') { openChat(); e.preventDefault(); }
-    else if (e.code >= 'Digit1' && e.code <= 'Digit4') switchWeapon(+e.code.slice(5) - 1);
+    else if (e.code === 'KeyG') throwNade('frag');
+    else if (e.code === 'KeyH') throwNade('smoke');
+    else if (/^Digit[0-9]$/.test(e.code)) switchWeapon((+e.code.slice(5) + 9) % 10);
   });
   document.addEventListener('keyup', function (e) {
     keys[e.code] = false;
@@ -1536,11 +1689,11 @@
     me.ammo[me.wi]--;
     var cp = Math.cos(me.pitch);
     send({ t: 'shoot', w: w.id, dx: -Math.sin(me.yaw) * cp, dy: Math.sin(me.pitch), dz: -Math.cos(me.yaw) * cp });
-    shotSound(w.id, 0.45);
+    shotSound(w.id, me.su ? 0.12 : 0.45);
     me.pitch = clamp(me.pitch + w.recoil * (me.ads ? 0.5 : 1), -1.5, 1.5);
     me.yaw += (Math.random() - 0.5) * w.recoil * 0.6;
-    me.kick = Math.min(0.12, me.kick + (w.id === 'shotgun' || w.id === 'sniper' ? 0.1 : 0.04));
-    flashUntil = now + 50;
+    me.kick = Math.min(0.12, me.kick + (w.recoil > 0.05 ? 0.1 : 0.04));
+    flashUntil = now + (me.su ? 0 : 50);
     if (me.ammo[me.wi] === 0) startReload(now);
   }
 
@@ -1616,10 +1769,10 @@
       }
       var w = W[ORDER[me.wi]];
       if (me.ads && !me.own[me.wi]) { me.ads = false; document.body.classList.remove('ads'); }
-      var targetFov = me.ads && me.alive ? w.zoom : (me.sprint ? BASE_FOV + 6 : BASE_FOV);
+      var targetFov = me.ads && me.alive ? (me.sc ? Math.max(10, w.zoom * 0.55) : w.zoom) : (me.sprint ? BASE_FOV + 6 : BASE_FOV);
       curFov += (targetFov - curFov) * Math.min(1, dt * 14);
       if (Math.abs(camera.fov - curFov) > 0.01) { camera.fov = curFov; camera.updateProjectionMatrix(); }
-      var scoped = me.ads && me.alive && w.id === 'sniper' && curFov < 30;
+      var scoped = me.ads && me.alive && curFov < 24;
       document.body.classList.toggle('scoped', scoped);
 
       var speedNow = Math.hypot(me.vx, me.vz);
@@ -1662,6 +1815,8 @@
       remotes.forEach(function (r) { updateRemote(r, rt, dt, now); });
       updateFx(now);
       updateLoot(now, dt);
+      updateNadeMeshes();
+      updateEffects2(now);
       updateHUD();
     } else {
       // lobbi arxa planı: arenanın üstündə dönən kamera
@@ -1749,6 +1904,8 @@
     }
     btn('tf', function () { me.fireHeld = true; me.fireFresh = true; }, function () { me.fireHeld = false; });
     btn('tj', function () { tc.jump = true; });
+    btn('tg', function () { throwNade('frag'); });
+    btn('th', function () { throwNade('smoke'); });
     btn('tr', function () { startReload(performance.now()); });
     btn('tb', function () { boardHeld = true; updateBoardVisibility(); }, function () { boardHeld = false; updateBoardVisibility(); });
     function toggle(id, get, set) {
@@ -1774,8 +1931,8 @@
   initTouch();
 
   /* ======================= Ayarlar və düymə düzənləyicisi ======================= */
-  var CTL_IDS = ['js', 'tf', 'tj', 'ta', 'tr', 'tcr', 'ts', 'tb'];
-  var CTL_NAMES = { js: 'Joystik', tf: 'Atəş', tj: 'Tullan', ta: 'Nişan', tr: 'Doldur', tcr: 'Əyil', ts: 'Qaç', tb: 'Cədvəl' };
+  var CTL_IDS = ['js', 'tf', 'tj', 'ta', 'tr', 'tcr', 'ts', 'tb', 'tg', 'th'];
+  var CTL_NAMES = { js: 'Joystik', tf: 'Atəş', tj: 'Tullan', ta: 'Nişan', tr: 'Doldur', tcr: 'Əyil', ts: 'Qaç', tb: 'Cədvəl', tg: 'Qumbara', th: 'Tüstü' };
   var layout = {};
   try {
     var lraw = JSON.parse(store.get('arena-layout', '{}'));

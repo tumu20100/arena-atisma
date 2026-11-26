@@ -48,7 +48,7 @@ Raund bitəndən 8 saniyə sonra yeni oyun avtomatik başlayır.
 Lobbidə otaq yaradanda xəritə seçilir (qoşulanlar otağın xəritəsini görür).
 
 - **Arena**: böyüdülmüş beton meydança. Hamı silahlı, kaskla və bədənliklə başlayır. Birgə (bot) rejimi yalnız burada işləyir.
-- **Açıq dünya**: 180×180 metrlik ərazi, 18 ev, ağaclar, daşlar, qutular. Hamı **silahsız, kasksız, bədənliksiz** başlayır. Evlərin içində və qutuların yanında yerdə əşyalar var: tapança, avtomat, pompalı, snayper, kask, bədənlik, tibbi çanta. Üstünə yaxınlaşmaq kifayətdir, avtomatik götürülür. Götürülən əşya 45 saniyəyə yenidən çıxır (təsadüfi növdə). Ölən oyunçunun ən güclü silahı, kaskı və bədənliyi düşür, onları da götürə bilərsiniz. Evlərin pəncərələrindən atəş etmək olar.
+- **Açıq dünya**: 180×180 metrlik ərazi, 18 ev, ağaclar, daşlar, qutular. Hamı **silahsız, kasksız, bədənliksiz** başlayır. Evlərin içində və qutuların yanında yerdə əşyalar var: 10 silah, 3 səviyyəli kask və bədənlik, tibbi çanta, bandaj, qumbara, tüstü, durbin, susdurucu. Üstünə yaxınlaşmaq kifayətdir, avtomatik götürülür. Götürülən əşya 45 saniyəyə yenidən çıxır (təsadüfi növdə). Ölən oyunçunun ən güclü silahı, kaskı və bədənliyi düşür, onları da götürə bilərsiniz. Evlərin pəncərələrindən atəş etmək olar.
 
 ## 4. İdarəetmə
 
@@ -62,26 +62,49 @@ Lobbidə otaq yaradanda xəritə seçilir (qoşulanlar otağın xəritəsini gö
 | Ctrl (basılı saxla) + W | sürətli qaçış |
 | W-ni 2 saniyə basılı saxla | **avtomatik qaçış** (aşağıya bax) |
 | Shift (basılı saxla) | əyilmək: daha yavaş, amma hədəf kiçilir və güllələr üstündən keçə bilər |
-| 1 2 3 4 və ya siçan çarxı | silah dəyişmək |
+| 1 - 0 və ya siçan çarxı | silah dəyişmək |
+| G / H | qumbara / tüstü qumbarası |
 | R | doldurmaq |
 | Tab (basılı saxla) | xal cədvəli |
 | Enter | söhbət |
 | Esc | fasilə (buradan Ayarlara girmək olar) |
 
-## 5. Silahlar
+## 5. Silahlar (10 ədəd)
 
-| Silah | Zədə | Sürət | Qoruyucu | Qeyd |
+| Silah | Zədə | Atəş | Dolu | Qeyd |
 |---|---|---|---|---|
-| Tapança | 22 | orta | 12 | dəqiq |
-| Avtomat | 14 | çox sürətli (basılı saxla) | 30 | ən universal |
-| Pompalı | 8 saçma x 11 | yavaş | 6 | yaxın məsafədə güclü |
-| Snayper | 85 | çox yavaş | 5 | ən uzaq məsafə |
+| P92 (tapança) | 22 | orta | 12 | dəqiq |
+| Deagle | 46 | yavaş | 7 | güclü tapança |
+| UZI | 10 | çox sürətli | 30 | yaxın məsafə, səpələnir |
+| M416 | 14 | sürətli | 30 | ən universal |
+| AKM | 19 | sürətli | 30 | M416-dan güclü, geri təpən çox |
+| SKS | 36 | orta | 10 | dəqiq, uzaq məsafə (yarımavtomat) |
+| M249 | 13 | sürətli | 75 | pulemyot, doldurması uzundur |
+| S12K (pompalı) | 8 saçma x 11 | yavaş | 6 | yaxında çox güclü |
+| Kar98k | 85 | çox yavaş | 5 | uzaq məsafə |
+| AWM | 110 | çox yavaş | 5 | ən güclü snayper |
 
-Başa vurulan atəş 2 dəfə zədə vurur, uzaq məsafədə zədə azalır. Beş saniyə zədə almasan can yavaş-yavaş bərpa olur.
+Silah dəyişmək: **1 2 3 4 5 6 7 8 9 0** düymələri və ya siçan çarxı. Telefonda yuxarıdakı rəqəmlərə toxunun.
 
-## 6. Kask və bədənlik
+## 6. Kask və bədənlik (3 səviyyə)
 
-Hər oyunçu kask (50) və bədənliklə (60) doğulur. Kask başa dəyən zədənin yarısını, bədənlik bədənə dəyən zədənin yarısını udur. Dayanıqlıq bitəndən sonra tam zədə keçir. Ekranın sol aşağısında can çubuğunun altında hər ikisi görünür. Ölüb yenidən doğulanda tam bərpa olur. Birgə rejimdə hər dalğa başlayanda sağ qalanların kaskı və bədənliyi yenilənir. Botlarda kask və bədənlik yoxdur.
+| Səviyyə | Kask | Bədənlik |
+|---|---|---|
+| 1 | 50 dayanıqlıq, zədənin 45%-ni udur | 60 dayanıqlıq, 35% |
+| 2 | 90 dayanıqlıq, 60% | 100 dayanıqlıq, 50% |
+| 3 | 130 dayanıqlıq, 75% | 150 dayanıqlıq, 65% |
+
+Kask başa, bədənlik bədənə dəyən zədəni azaldır. Dayanıqlıq bitəndən sonra tam zədə keçir. Yüksək səviyyəli kask/bədənlik aşağıdakını əvəz edir. Eyni səviyyəni götürsəniz dayanıqlıq bərpa olur. Arenada hamı 2-ci səviyyə ilə başlayır, açıq dünyada heç nə olmadan. Botlarda kask və bədənlik yoxdur.
+
+## 6b. Qumbaralar, əlavələr, müalicə
+
+- **Qumbara (G)**: 3 saniyədən sonra partlayır, 8 metr radiusda zədə verir (yaxında öldürür). Divarlar partlayışı saxlayır, bədənlik zədəni azaldır. Öz qumbaranız sizə də zərər verir, komanda rejimində komanda yoldaşlarına verməz.
+- **Tüstü qumbarası (H)**: 1,5 saniyədən sonra 15 saniyəlik tüstü buludu yaradır, görünüşü bağlayır.
+- **Durbin**: nişan alanda (ADS) yaxınlaşdırma güclənir, istənilən silahla işləyir.
+- **Susdurucu**: atəşi yalnız 28 metr yaxınlıqdakılar eşidir və görür, atəş alovu görünmür.
+- **Tibbi çanta**: canı tam doldurur. **Bandaj**: +20 can.
+
+Açıq dünyada bunların hamısı evlərdə və qutuların yanında tapılır. Arenada hər kəs 2 qumbara və 1 tüstü qumbarası ilə doğulur. Telefonda ekranın yuxarı sağında "BOMBA" və "TÜSTÜ" düymələri var (düzülüşü ayarlarda dəyişmək olar).
 
 ### Avtomatik qaçış
 
