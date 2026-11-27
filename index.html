@@ -148,6 +148,25 @@ button.go:active { transform: translateY(3px); box-shadow: 0 1px 0 #a86f00; }
 .tb.big { width: calc(96px * var(--s, 1)); height: calc(96px * var(--s, 1)); font-size: calc(15px * var(--s, 1)); background: rgba(239,71,111,.5); border-color: rgba(255,255,255,.55); right: max(30px, env(safe-area-inset-right, 0px)); bottom: max(36px, env(safe-area-inset-bottom, 0px)); }
 .tb.big.on { background: rgba(239,71,111,.85); }
 .tb.mini { width: calc(56px * var(--s, 1)); height: calc(56px * var(--s, 1)); font-size: calc(10px * var(--s, 1)); top: 96px; }
+#te { display: none; left: max(14px, env(safe-area-inset-left, 0px)); top: 110px; width: calc(64px * var(--s, 1)); height: calc(64px * var(--s, 1)); }
+body.cartip #te, body.editing #te { display: flex; }
+#hint { position: fixed; left: 50%; bottom: 22%; transform: translateX(-50%); font-weight: 700; letter-spacing: .08em; color: #fff; text-shadow: 0 1px 4px #000; pointer-events: none; z-index: 5; }
+#spd { position: fixed; right: 24px; bottom: 24px; font: 700 28px var(--font); color: #fff; text-shadow: 0 1px 6px #000; pointer-events: none; z-index: 5; }
+body.touch #spd { right: auto; left: 50%; transform: translateX(-50%); bottom: 18px; font-size: 22px; }
+.fsbtn { position: fixed; top: 12px; right: 12px; z-index: 90; width: 38px; height: 38px; font-size: 20px; line-height: 1; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; cursor: pointer; }
+body.touch .fsbtn { right: calc(max(14px, env(safe-area-inset-right, 0px)) + 78px); top: 8px; }
+#loadout { z-index: 80; background: rgba(8,10,14,.92); }
+#loadout .box { width: min(760px, 100%); }
+.wgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin: 6px 0 14px; }
+.wc { padding: 10px; background: var(--panel); border: 2px solid var(--line); border-radius: 10px; cursor: pointer; user-select: none; }
+.wc.sel { border-color: var(--amber); background: rgba(255,183,3,.14); }
+.wc b { display: block; font-size: 17px; letter-spacing: .06em; }
+.wc .wt { display: block; font-size: 11px; color: var(--dim); margin-bottom: 6px; text-transform: uppercase; letter-spacing: .08em; }
+.wc .st { position: relative; height: 12px; margin: 3px 0; background: rgba(255,255,255,.08); border-radius: 3px; overflow: hidden; }
+.wc .st i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--amber); }
+.wc .st em { position: relative; z-index: 1; font-style: normal; font-size: 9px; padding-left: 4px; line-height: 12px; color: #000; font-weight: 700; }
+.wc small { font-size: 11px; color: var(--dim); }
+#lo-note { margin: 4px 0 12px; color: var(--dim); }
 #tg { right: max(14px, env(safe-area-inset-right, 0px)); }
 #th { right: calc(max(14px, env(safe-area-inset-right, 0px)) + 66px); }
 #tj { right: calc(max(30px, env(safe-area-inset-right, 0px)) + 112px); bottom: max(52px, env(safe-area-inset-bottom, 0px)); }
@@ -203,6 +222,9 @@ body.editing .sel { outline: 3px solid var(--amber) !important; background-color
 <body>
 <canvas id="c"></canvas>
 
+<button id="fsbtn" class="fsbtn" type="button" title="Tam ekran">⛶</button>
+<div id="hint"></div>
+<div id="spd"></div>
 <div id="hud" hidden>
   <div id="info" title="Dəvət linkini kopyala"><b id="rcode"></b><small id="rmode"></small><small id="rcount"></small></div>
   <div id="topc"><div id="scoreline"></div><div id="subline"></div></div>
@@ -245,6 +267,7 @@ body.editing .sel { outline: 3px solid var(--amber) !important; background-color
     <div class="tb" id="tcr" role="button">ƏYİL</div>
     <div class="tb" id="ts" role="button">QAÇ</div>
     <div class="tb small" id="tb" role="button">CƏDVƏL</div>
+    <div class="tb mini" id="te" role="button">MİN</div>
     <div class="tb mini" id="tg" role="button">BOMBA</div>
     <div class="tb mini" id="th" role="button">TÜSTÜ</div>
   </div>
@@ -283,10 +306,23 @@ body.editing .sel { outline: 3px solid var(--amber) !important; background-color
       <span><b>Sol klik</b> at</span><span><b>Sağ klik</b> nişan al</span>
       <span><b>Boşluq</b> tullan</span><span><b>Ctrl</b> sürətli qaç</span>
       <span><b>Shift</b> əyil</span><span><b>1 - 0</b> silah</span>
-      <span><b>R</b> doldur</span><span><b>G / H</b> qumbara / tüstü</span><span><b>Tab</b> xal cədvəli</span>
+      <span><b>E</b> maşına min/düş</span><span><b>F</b> tam ekran</span><span><b>R</b> doldur</span><span><b>G / H</b> qumbara / tüstü</span><span><b>Tab</b> xal cədvəli</span>
       <span><b>Enter</b> söhbət</span><span><b>Esc</b> fasilə</span>
     </div>
   </form>
+</div>
+
+<div id="loadout" class="screen" hidden>
+  <div class="box">
+    <h2>Silah seç</h2>
+    <p>1 tapança və 2 əsas silah götürürsən. Hər ölümdən sonra yenidən seçə bilərsən.</p>
+    <h3>Tapança</h3>
+    <div class="wgrid" id="lo-side"></div>
+    <h3>Əsas silahlar (2 ədəd)</h3>
+    <div class="wgrid" id="lo-main"></div>
+    <div id="lo-note"></div>
+    <button class="go" id="lo-go" type="button">BAŞLA</button>
+  </div>
 </div>
 
 <div id="pause" class="screen" hidden>

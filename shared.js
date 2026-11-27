@@ -89,11 +89,12 @@
     m.spawns = [[-40, -40], [40, -40], [-40, 40], [40, 40], [0, -41], [0, 41], [-41, 0], [41, 0]];
   })();
 
-  /* --- 2. Açıq dünya: evlər, loot --- */
-  var ISLAND = newMap('island', 90, 'Açıq dünya');
+  /* --- 2. Açıq dünya: kəndlər, tək evlər, meşələr, maşınlar (700x700 m) --- */
+  var ISLAND = newMap('island', 350, 'Açıq dünya');
   ISLAND.loot = true;
+  ISLAND.cars = [];
   (function () {
-    var m = ISLAND, r = rng(7);
+    var m = ISLAND, r = rng(7), HALF_I = m.half;
     outerWalls(m);
 
     function seg(ax, fixed, a, b, y0, y1, c) {
@@ -115,19 +116,48 @@
       seg(ax, fixed, cur, a1, 0, 3, c);
     }
 
-    var H = [
-      [-62, -58, 10, 8], [-22, -68, 8, 7], [28, -66, 12, 9], [66, -50, 8, 8], [-68, -8, 9, 7], [-30, -28, 8, 7],
-      [8, -35, 7, 7], [52, -12, 10, 8], [-10, 5, 9, 8], [22, 14, 8, 7], [-48, 30, 10, 8], [-12, 38, 8, 7],
-      [40, 40, 12, 9], [72, 30, 8, 7], [-70, 62, 9, 8], [20, 70, 10, 8], [-32, 72, 7, 7], [64, 72, 8, 8]
-    ];
+    /* evlərin yerləşdirilməsi */
+    var H = [];
+    var SIZES_W = [7, 8, 8, 9, 10, 12], SIZES_D = [6, 7, 7, 8, 9];
+    function houseFree(cx, cz, w, d, gap) {
+      if (Math.abs(cx) > HALF_I - 22 || Math.abs(cz) > HALF_I - 22) return false;
+      for (var i = 0; i < H.length; i++) {
+        var h = H[i];
+        if (Math.abs(cx - h[0]) < (w + h[2]) / 2 + gap && Math.abs(cz - h[1]) < (d + h[3]) / 2 + gap) return false;
+      }
+      return true;
+    }
+    function tryHouse(cx, cz, gap) {
+      var w = SIZES_W[(r() * SIZES_W.length) | 0], d = SIZES_D[(r() * SIZES_D.length) | 0];
+      if (!houseFree(cx, cz, w, d, gap)) return false;
+      H.push([Math.round(cx), Math.round(cz), w, d]);
+      return true;
+    }
+    var villages = [];
+    for (var vt = 0; vt < 600 && villages.length < 16; vt++) {
+      var vx = (r() * 2 - 1) * (HALF_I - 70), vz = (r() * 2 - 1) * (HALF_I - 70), okv = true;
+      for (var vi = 0; vi < villages.length; vi++) if (Math.hypot(villages[vi][0] - vx, villages[vi][1] - vz) < 110) okv = false;
+      if (okv) villages.push([vx, vz]);
+    }
+    villages.forEach(function (v) {
+      var n = 8 + ((r() * 6) | 0), placed = 0;
+      for (var k = 0; k < 120 && placed < n; k++) {
+        var ang = r() * Math.PI * 2, rad = 8 + Math.sqrt(r()) * 50;
+        if (tryHouse(v[0] + Math.cos(ang) * rad, v[1] + Math.sin(ang) * rad, 8)) placed++;
+      }
+    });
+    for (var lt = 0, lone = 0; lt < 800 && lone < 60; lt++) {
+      if (tryHouse((r() * 2 - 1) * (HALF_I - 30), (r() * 2 - 1) * (HALF_I - 30), 16)) lone++;
+    }
+
     H.forEach(function (h, i) {
       var cx = h[0], cz = h[1], w = h[2], d = h[3], c = i % 3;
       var big = w >= 11 || d >= 9;
-      var side = Math.abs(cx) > Math.abs(cz) ? (cx > 0 ? 3 : 2) : (cz > 0 ? 1 : 0); // 0:+z 1:-z 2:+x 3:-x divarı
+      var side = Math.abs(cx) > Math.abs(cz) ? (cx > 0 ? 3 : 2) : (cz > 0 ? 1 : 0);
+      if (r() < 0.35) side = (r() * 4) | 0; // hər ev mərkəzə baxmır
       m.houses.push({ cx: cx, cz: cz, w: w, d: d, c: c, side: side });
       var sgn = r() < 0.5 ? -1 : 1;
       var xs = [cx - w / 2, cx + w / 2], zs = [cz - d / 2, cz + d / 2];
-      // x boyunca uzanan divarlar: z = zs[0] (şimal, side 1), z = zs[1] (cənub, side 0)
       [[1, zs[0]], [0, zs[1]]].forEach(function (p) {
         var ops = [];
         if (side === p[0]) {
@@ -139,7 +169,6 @@
         } else ops.push({ at: cx, w: 1.4, type: 'window' });
         wall('x', p[1], xs[0] - T / 2, xs[1] + T / 2, ops, c);
       });
-      // z boyunca uzanan divarlar: x = xs[0] (qərb, side 3), x = xs[1] (şərq, side 2)
       [[3, xs[0]], [2, xs[1]]].forEach(function (p) {
         var ops = [];
         if (side === p[0]) {
@@ -151,14 +180,11 @@
         } else ops.push({ at: cz, w: 1.4, type: 'window' });
         wall('z', p[1], zs[0] + T / 2, zs[1] - T / 2, ops, c);
       });
-      // böyük evdə ara divar
       if (big) {
-        var pdoor = side < 2 ? [{ at: cz + 0.5, w: 1.6, type: 'door' }] : [{ at: cz + 0.5, w: 1.6, type: 'door' }];
-        if (side < 2) wall('z', cx, zs[0] + T / 2, zs[1] - T / 2, pdoor, c);
+        if (side < 2) wall('z', cx, zs[0] + T / 2, zs[1] - T / 2, [{ at: cz + 0.5, w: 1.6, type: 'door' }], c);
         else wall('x', cz, xs[0] + T / 2, xs[1] - T / 2, [{ at: cx + 0.5, w: 1.6, type: 'door' }], c);
       }
       addBox(m, cx, cz, w + 0.8, d + 0.8, 3.25, { y0: 3.0, kind: 'roof', c: c });
-      // loot yerləri
       var q = [[-0.25, -0.22], [0.25, 0.22]];
       if (big) q = [[-0.27, -0.25], [0.27, -0.25], [-0.27, 0.25], [0.27, 0.25]];
       q.forEach(function (o) { m.lootSpots.push([cx + o[0] * w, cz + o[1] * d]); });
@@ -171,45 +197,64 @@
       }
       return false;
     }
-    m.spawns = [[-80, -80], [80, -80], [-80, 80], [80, 80], [0, -84], [0, 84], [-84, 0], [84, 0], [-45, -84], [45, -84], [-45, 84], [45, 84]];
+    var E = HALF_I - 6, Q = HALF_I / 2;
+    m.spawns = [[-E, -E], [E, -E], [-E, E], [E, E], [0, -E], [0, E], [-E, 0], [E, 0],
+      [-Q, -E], [Q, -E], [-Q, E], [Q, E], [-E, -Q], [E, -Q], [-E, Q], [E, Q]];
     function nearSpawn(x, z, d) {
       for (var i = 0; i < m.spawns.length; i++) if (Math.hypot(x - m.spawns[i][0], z - m.spawns[i][1]) < d) return true;
       return false;
     }
-    // açıq havada yardımçı qutular və loot
-    var outs = [];
-    for (var tries = 0; tries < 400 && outs.length < 16; tries++) {
-      var x = (r() * 2 - 1) * 80, z = (r() * 2 - 1) * 80;
-      if (nearHouse(x, z, 5) || nearSpawn(x, z, 10)) continue;
-      var ok = true;
-      for (var k = 0; k < outs.length; k++) if (Math.hypot(outs[k][0] - x, outs[k][1] - z) < 18) ok = false;
-      if (!ok) continue;
-      outs.push([x, z]);
+    var obst = []; // [x, z, radius]
+    function obstFree(x, z, rad) {
+      for (var i = 0; i < obst.length; i++) if (Math.hypot(obst[i][0] - x, obst[i][1] - z) < obst[i][2] + rad) return false;
+      return true;
     }
-    outs.forEach(function (o) {
-      addBox(m, o[0] + 1.3, o[1], 1.2, 1.2, 1.0, { kind: 'crate' });
-      addBox(m, o[0] + 1.4, o[1] + 1.2, 1.2, 1.2, 1.0, { kind: 'crate' });
-      m.lootSpots.push([o[0], o[1]]);
-    });
+
+    // maşınlar
+    for (var ct = 0; ct < 800 && m.cars.length < 8; ct++) {
+      var cx2 = (r() * 2 - 1) * (HALF_I - 40), cz2 = (r() * 2 - 1) * (HALF_I - 40);
+      if (nearHouse(cx2, cz2, 8) || nearSpawn(cx2, cz2, 25) || !obstFree(cx2, cz2, 40)) continue;
+      m.cars.push([Math.round(cx2), Math.round(cz2), r() * Math.PI * 2]);
+      obst.push([cx2, cz2, 6]);
+    }
+    // açıq havada qutular və loot
+    var crates = 0;
+    for (var tries = 0; tries < 2000 && crates < 70; tries++) {
+      var x = (r() * 2 - 1) * (HALF_I - 20), z = (r() * 2 - 1) * (HALF_I - 20);
+      if (nearHouse(x, z, 5) || nearSpawn(x, z, 12) || !obstFree(x, z, 4)) continue;
+      addBox(m, x + 1.3, z, 1.2, 1.2, 1.0, { kind: 'crate' });
+      addBox(m, x + 1.4, z + 1.2, 1.2, 1.2, 1.0, { kind: 'crate' });
+      m.lootSpots.push([x, z]);
+      obst.push([x, z, 3]);
+      crates++;
+    }
     // daşlar
-    for (var t2 = 0, rocks = 0; t2 < 300 && rocks < 18; t2++) {
-      var rx = (r() * 2 - 1) * 84, rz = (r() * 2 - 1) * 84;
-      if (nearHouse(rx, rz, 4) || nearSpawn(rx, rz, 6)) continue;
+    for (var t2 = 0, rocks = 0; t2 < 2000 && rocks < 140; t2++) {
+      var rx = (r() * 2 - 1) * (HALF_I - 10), rz = (r() * 2 - 1) * (HALF_I - 10);
+      if (nearHouse(rx, rz, 4) || nearSpawn(rx, rz, 8) || !obstFree(rx, rz, 3)) continue;
       var rs = 1.6 + r() * 1.8;
       addBox(m, rx, rz, rs, rs * (0.8 + r() * 0.5), 1.0 + r() * 1.0, { kind: 'rock' });
+      obst.push([rx, rz, 2]);
       rocks++;
     }
-    // ağaclar
-    for (var t3 = 0, trees = 0; t3 < 1200 && trees < 110; t3++) {
-      var tx = (r() * 2 - 1) * 86, tz = (r() * 2 - 1) * 86;
-      if (nearHouse(tx, tz, 3.5) || nearSpawn(tx, tz, 5)) continue;
-      var bad = false;
-      for (var k2 = 0; k2 < m.boxes.length; k2++) {
-        var bx = m.boxes[k2];
-        if (bx.kind === 'hwall' || bx.kind === 'roof' || bx.wall) continue;
-        if (Math.abs(tx - bx.cx) < bx.w / 2 + 1.5 && Math.abs(tz - bx.cz) < bx.d / 2 + 1.5) { bad = true; break; }
-      }
-      if (bad) continue;
+    // ağaclar: meşə kütlələri + tək ağaclar
+    var forests = [];
+    for (var ft = 0; ft < 40; ft++) forests.push([(r() * 2 - 1) * (HALF_I - 30), (r() * 2 - 1) * (HALF_I - 30), 20 + r() * 35]);
+    var trees = 0, grid = {};
+    function treeFree(x, z) {
+      var gx = Math.floor(x / 4), gz = Math.floor(z / 4);
+      for (var a = -1; a <= 1; a++) for (var b = -1; b <= 1; b++) if (grid[(gx + a) + ',' + (gz + b)]) return false;
+      return true;
+    }
+    for (var t3 = 0; t3 < 14000 && trees < 1700; t3++) {
+      var tx, tz;
+      if (r() < 0.7) {
+        var f = forests[(r() * forests.length) | 0], ang2 = r() * Math.PI * 2, rr = Math.sqrt(r()) * f[2];
+        tx = f[0] + Math.cos(ang2) * rr; tz = f[1] + Math.sin(ang2) * rr;
+      } else { tx = (r() * 2 - 1) * (HALF_I - 8); tz = (r() * 2 - 1) * (HALF_I - 8); }
+      if (Math.abs(tx) > HALF_I - 4 || Math.abs(tz) > HALF_I - 4) continue;
+      if (nearHouse(tx, tz, 3.5) || nearSpawn(tx, tz, 5) || !obstFree(tx, tz, 1.5) || !treeFree(tx, tz)) continue;
+      grid[Math.floor(tx / 4) + ',' + Math.floor(tz / 4)] = 1;
       addBox(m, tx, tz, 0.7, 0.7, 7, { kind: 'tree', c: (r() * 3) | 0 });
       trees++;
     }
@@ -233,8 +278,9 @@
   function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
 
   // Oyunçunu (pos: {x,y,z}, y = ayaq səviyyəsi) maneələrdən kənara itələyir.
-  function resolve(pos, map) {
+  function resolve(pos, map, rad) {
     map = map || cur;
+    var RAD = rad || RADIUS;
     var boxes = map.boxes;
     for (var it = 0; it < 3; it++) {
       for (var i = 0; i < boxes.length; i++) {
@@ -243,22 +289,22 @@
         if (b.y0 >= pos.y + HEIGHT) continue;
         var cx = clamp(pos.x, b.x0, b.x1), cz = clamp(pos.z, b.z0, b.z1);
         var dx = pos.x - cx, dz = pos.z - cz, d2 = dx * dx + dz * dz;
-        if (d2 >= RADIUS * RADIUS) continue;
+        if (d2 >= RAD * RAD) continue;
         if (d2 > 1e-8) {
-          var d = Math.sqrt(d2), push = RADIUS - d;
+          var d = Math.sqrt(d2), push = RAD - d;
           pos.x += dx / d * push;
           pos.z += dz / d * push;
         } else {
           var l = pos.x - b.x0, r = b.x1 - pos.x, t = pos.z - b.z0, bt = b.z1 - pos.z;
           var mn = Math.min(l, r, t, bt);
-          if (mn === l) pos.x = b.x0 - RADIUS;
-          else if (mn === r) pos.x = b.x1 + RADIUS;
-          else if (mn === t) pos.z = b.z0 - RADIUS;
-          else pos.z = b.z1 + RADIUS;
+          if (mn === l) pos.x = b.x0 - RAD;
+          else if (mn === r) pos.x = b.x1 + RAD;
+          else if (mn === t) pos.z = b.z0 - RAD;
+          else pos.z = b.z1 + RAD;
         }
       }
     }
-    var lim = map.half - RADIUS;
+    var lim = map.half - RAD;
     pos.x = clamp(pos.x, -lim, lim);
     pos.z = clamp(pos.z, -lim, lim);
   }

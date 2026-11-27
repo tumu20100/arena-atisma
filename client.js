@@ -318,7 +318,7 @@
 
   /* ======================= Dünya (xəritəyə görə qurulur) ======================= */
   var world = null, curMapId = '';
-  var FOG = { arena: [55, 200], island: [60, 250] };
+  var FOG = { arena: [55, 200], island: [70, 300] };
   var railMat = new THREE.MeshLambertMaterial({ color: 0x2c3138 });
   var marksTex = null;
 
@@ -533,45 +533,43 @@
 
   function buildIsland(map) {
     var T = islandTex();
-    T.grass.repeat.set(110, 110);
-    var gnd = new THREE.Mesh(new THREE.PlaneGeometry(880, 880), new THREE.MeshLambertMaterial({ map: T.grass }));
+    T.grass.repeat.set(150, 150);
+    var gnd = new THREE.Mesh(new THREE.PlaneGeometry(1200, 1200), new THREE.MeshLambertMaterial({ map: T.grass }));
     gnd.rotation.x = -Math.PI / 2; gnd.receiveShadow = true;
     world.add(gnd);
 
-    var M = {
-      hwall: [0, 1, 2].map(function (c) { return new Merger(T.plaster[c]); }),
-      roof: [0, 1, 2].map(function (c) { return new Merger(T.roof[c]); }),
-      crate: new Merger(matsByKind.crate), rock: new Merger(T.rock), bark: new Merger(T.bark),
-      leaf: [0, 1, 2].map(function (c) { return new Merger(T.leaf[c]); }),
-      floor: new Merger(matsByKind.crate), pad: new Merger(T.dirt)
-    };
+    // eyni materialı paylaşan qutular 110 m-lik hissələrə birləşdirilir (görünməyən hissələr çəkilmir)
+    var CH = {};
+    function mg(key, mat, x, z, cast, recv) {
+      var k = key + '@' + Math.floor(x / 110) + ',' + Math.floor(z / 110);
+      var o = CH[k];
+      if (!o) { o = CH[k] = new Merger(mat); o.cast = cast; o.recv = recv; }
+      return o;
+    }
     map.boxes.forEach(function (b, i) {
       var hh = b.y1 - b.y0, cy = (b.y0 + b.y1) / 2;
       if (b.wall) { wallBox(b, i, 'wall'); return; }
-      if (b.kind === 'hwall') M.hwall[b.c].add(scaledBox(b.w, hh, b.d, 3), b.cx, cy, b.cz);
-      else if (b.kind === 'roof') M.roof[b.c].add(scaledBox(b.w, hh, b.d, 3), b.cx, cy, b.cz);
-      else if (b.kind === 'crate') M.crate.add(scaledBox(b.w, hh, b.d, 2), b.cx, cy, b.cz);
-      else if (b.kind === 'rock') M.rock.add(scaledBox(b.w, hh, b.d, 3), b.cx, cy, b.cz);
+      if (b.kind === 'hwall') mg('hw' + b.c, T.plaster[b.c], b.cx, b.cz, true, true).add(scaledBox(b.w, hh, b.d, 3), b.cx, cy, b.cz);
+      else if (b.kind === 'roof') mg('rf' + b.c, T.roof[b.c], b.cx, b.cz, true, true).add(scaledBox(b.w, hh, b.d, 3), b.cx, cy, b.cz);
+      else if (b.kind === 'crate') mg('cr', matsByKind.crate, b.cx, b.cz, true, true).add(scaledBox(b.w, hh, b.d, 2), b.cx, cy, b.cz);
+      else if (b.kind === 'rock') mg('rk', T.rock, b.cx, b.cz, true, true).add(scaledBox(b.w, hh, b.d, 3), b.cx, cy, b.cz);
       else if (b.kind === 'tree') {
         var s = 0.85 + b.c * 0.15;
-        M.bark.add(new THREE.BoxGeometry(0.5, 3.2, 0.5), b.cx, 1.6, b.cz);
-        var L = M.leaf[b.c];
-        L.add(new THREE.ConeGeometry(2.1 * s, 2.8 * s, 8), b.cx, 3.6 * s, b.cz);
-        L.add(new THREE.ConeGeometry(1.6 * s, 2.4 * s, 8), b.cx, 4.9 * s, b.cz);
-        L.add(new THREE.ConeGeometry(1.05 * s, 2.2 * s, 8), b.cx, 6.1 * s, b.cz);
+        mg('bk', T.bark, b.cx, b.cz, true, false).add(new THREE.BoxGeometry(0.5, 3.2, 0.5), b.cx, 1.6, b.cz);
+        var L = mg('lf' + b.c, T.leaf[b.c], b.cx, b.cz, true, false);
+        L.add(new THREE.ConeGeometry(2.1 * s, 2.8 * s, 7), b.cx, 3.6 * s, b.cz);
+        L.add(new THREE.ConeGeometry(1.6 * s, 2.4 * s, 7), b.cx, 4.9 * s, b.cz);
+        L.add(new THREE.ConeGeometry(1.05 * s, 2.2 * s, 7), b.cx, 6.1 * s, b.cz);
       }
     });
     map.houses.forEach(function (h) {
-      M.floor.add(scaledBox(h.w, 0.06, h.d, 2), h.cx, 0.03, h.cz);
-      M.pad.add(scaledBox(h.w + 4, 0.03, h.d + 4, 4), h.cx, 0.015, h.cz);
+      mg('fl', matsByKind.crate, h.cx, h.cz, false, true).add(scaledBox(h.w, 0.06, h.d, 2), h.cx, 0.03, h.cz);
+      mg('pd', T.dirt, h.cx, h.cz, false, true).add(scaledBox(h.w + 4, 0.03, h.d + 4, 4), h.cx, 0.015, h.cz);
     });
-    function put(mg, cast, recv) { var m = mg.mesh(cast, recv); if (m) world.add(m); }
-    M.hwall.forEach(function (m) { put(m, true, true); });
-    M.roof.forEach(function (m) { put(m, true, true); });
-    M.leaf.forEach(function (m) { put(m, true, false); });
-    put(M.crate, true, true); put(M.rock, true, true); put(M.bark, true, false);
-    put(M.floor, false, true); put(M.pad, false, true);
-    mountains(rng(103), 24, 190, 45, 50);
+    Object.keys(CH).forEach(function (k) {
+      var o = CH[k], m = o.mesh(o.cast, o.recv);
+      if (m) world.add(m);
+    });
   }
 
   function buildWorld(id) {
@@ -585,7 +583,7 @@
     scene.add(world);
     scene.fog.near = FOG[id] ? FOG[id][0] : 55;
     scene.fog.far = FOG[id] ? FOG[id][1] : 200;
-    camera.far = id === 'island' ? 420 : 300;
+    camera.far = id === 'island' ? 520 : 300;
     camera.updateProjectionMatrix();
     if (id === 'island') buildIsland(map); else buildArena(map);
   }
@@ -961,8 +959,8 @@
       r.group.visible = now - r.diedAt < 1600;
     } else {
       r.group.rotation.x = 0;
-      r.group.visible = true;
-      if (r.tag) r.tag.visible = true;
+      r.group.visible = !r.inCar;
+      if (r.tag) r.tag.visible = !r.inCar;
     }
   }
 
@@ -1268,18 +1266,33 @@
     lootGroup.add(g);
     return { g: g, item: item, ty: ty, ph: Math.random() * 6 };
   }
-  function addLoot(id, ty, x, z) {
-    removeLoot(id);
-    lootItems.set(id, makeLoot(ty, x, z));
+  var lootData = new Map(), LOOT_VIS = 85, lootStreamT = 0;
+  function lootNear(x, z, r) {
+    var cx = joined ? me.x : 0, cz = joined ? me.z : 0;
+    return (x - cx) * (x - cx) + (z - cz) * (z - cz) < r * r;
   }
-  function removeLoot(id) {
+  function removeLootMesh(id) {
     var it = lootItems.get(id);
-    if (!it) return;
-    lootGroup.remove(it.g);
-    lootItems.delete(id);
+    if (it) { lootGroup.remove(it.g); lootItems.delete(id); }
   }
-  function clearLoot() { lootItems.forEach(function (it) { lootGroup.remove(it.g); }); lootItems.clear(); }
+  function addLoot(id, ty, x, z) {
+    lootData.set(id, { ty: ty, x: x, z: z });
+    removeLootMesh(id);
+    if (lootNear(x, z, LOOT_VIS)) lootItems.set(id, makeLoot(ty, x, z));
+  }
+  function removeLoot(id) { lootData.delete(id); removeLootMesh(id); }
+  function clearLoot() { lootItems.forEach(function (it) { lootGroup.remove(it.g); }); lootItems.clear(); lootData.clear(); }
+  function streamLoot(now) {
+    if (now - lootStreamT < 350) return;
+    lootStreamT = now;
+    lootData.forEach(function (d, id) {
+      var vis = lootItems.has(id), near = lootNear(d.x, d.z, vis ? LOOT_VIS + 15 : LOOT_VIS);
+      if (near && !vis) lootItems.set(id, makeLoot(d.ty, d.x, d.z));
+      else if (!near && vis) removeLootMesh(id);
+    });
+  }
   function updateLoot(now, dt) {
+    streamLoot(now);
     var t = now / 1000;
     lootItems.forEach(function (it) {
       it.item.rotation.y += dt * 1.6;
@@ -1325,7 +1338,7 @@
   var gBoom = new THREE.SphereGeometry(1, 14, 10);
   var smokeTex = softTex('rgba(205,210,214,1)', 'rgba(205,210,214,0)');
   function throwNade(kind) {
-    if (!joined || !me.alive || !locked() || chatting()) return;
+    if (!joined || !me.alive || car.id || !locked() || chatting()) return;
     if (kind === 'frag' ? me.gr <= 0 : me.sm <= 0) return;
     var now = performance.now();
     if (now - me.lastThrow < 900) return;
@@ -1380,6 +1393,142 @@
     }
   }
 
+
+  /* ======================= Maşın ======================= */
+  var cars = new Map();
+  var car = { id: 0, x: 0, z: 0, yaw: 0, sp: 0, camYaw: 0, hit: 0 };
+  var nearCarId = 0, engine = null;
+  var carMats = {
+    body: new THREE.MeshLambertMaterial({ color: 0xc0392b }),
+    glass: new THREE.MeshLambertMaterial({ color: 0x24384c }),
+    dark: new THREE.MeshLambertMaterial({ color: 0x1b1d20 }),
+    head: new THREE.MeshBasicMaterial({ color: 0xfff1b0 }),
+    tail: new THREE.MeshBasicMaterial({ color: 0xff3030 })
+  };
+  var carGeo = {
+    body: new THREE.BoxGeometry(1.9, 0.55, 4.2), cabin: new THREE.BoxGeometry(1.6, 0.55, 2.1),
+    bump: new THREE.BoxGeometry(1.95, 0.25, 0.2), wheel: new THREE.CylinderGeometry(0.38, 0.38, 0.3, 14),
+    lamp: new THREE.BoxGeometry(0.4, 0.15, 0.06)
+  };
+  function makeCarMesh() {
+    var g = new THREE.Group();
+    function add(geo, mat, x, y, z, rz) {
+      var m = new THREE.Mesh(geo, mat);
+      m.position.set(x, y, z);
+      if (rz) m.rotation.z = rz;
+      m.castShadow = true;
+      g.add(m);
+      return m;
+    }
+    add(carGeo.body, carMats.body, 0, 0.65, 0);
+    add(carGeo.cabin, carMats.glass, 0, 1.2, 0.35);
+    add(carGeo.bump, carMats.dark, 0, 0.45, -2.1);
+    add(carGeo.bump, carMats.dark, 0, 0.45, 2.1);
+    [[-1, -1.35], [1, -1.35], [-1, 1.35], [1, 1.35]].forEach(function (w) { add(carGeo.wheel, carMats.dark, w[0] * 0.98, 0.38, w[1], Math.PI / 2); });
+    add(carGeo.lamp, carMats.head, -0.6, 0.72, -2.12); add(carGeo.lamp, carMats.head, 0.6, 0.72, -2.12);
+    add(carGeo.lamp, carMats.tail, -0.6, 0.72, 2.12); add(carGeo.lamp, carMats.tail, 0.6, 0.72, 2.12);
+    return g;
+  }
+  function clearCars() { cars.forEach(function (o) { scene.remove(o.m); }); cars.clear(); car.id = 0; }
+  function syncCars(list) {
+    for (var i = 0; i < list.length; i++) {
+      var c = list[i], o = cars.get(c[0]);
+      if (!o) {
+        o = { m: makeCarMesh(), x: c[1], z: c[2], yaw: c[3], tx: c[1], tz: c[2], tyaw: c[3], sp: 0, driver: 0 };
+        o.m.position.set(o.x, 0, o.z); o.m.rotation.y = o.yaw;
+        scene.add(o.m);
+        cars.set(c[0], o);
+      }
+      o.tx = c[1]; o.tz = c[2]; o.tyaw = c[3]; o.sp = c[4]; o.driver = c[5];
+    }
+  }
+  function updateCars(dt) {
+    cars.forEach(function (o, id) {
+      if (id === car.id) { o.x = car.x; o.z = car.z; o.yaw = car.yaw; }
+      else {
+        var k = Math.min(1, dt * 9);
+        o.x += (o.tx - o.x) * k; o.z += (o.tz - o.z) * k;
+        o.yaw += angDiff(o.yaw, o.tyaw) * k;
+      }
+      o.m.position.set(o.x, 0, o.z);
+      o.m.rotation.y = o.yaw;
+    });
+    // yaxındakı boş maşın
+    nearCarId = 0;
+    if (joined && me.alive && !car.id) {
+      var best = 4.2 * 4.2;
+      cars.forEach(function (o, id) {
+        if (o.driver) return;
+        var d = (o.x - me.x) * (o.x - me.x) + (o.z - me.z) * (o.z - me.z);
+        if (d < best) { best = d; nearCarId = id; }
+      });
+    }
+    var showTip = !!(nearCarId || car.id);
+    document.body.classList.toggle('cartip', showTip && joined && me.alive);
+    setText('hint', !joined || !me.alive ? '' : car.id ? (IS_TOUCH ? '' : 'E: maşından düş') : nearCarId ? (IS_TOUCH ? '' : 'E: maşına min') : '');
+    setText('te', car.id ? 'DÜŞ' : 'MİN');
+    setText('spd', car.id ? Math.round(Math.abs(car.sp) * 3.6) + ' km/s' : '');
+  }
+  function interact() {
+    if (!joined || !me.alive || !locked() || chatting()) return;
+    if (car.id) send({ t: 'exit' });
+    else if (nearCarId) send({ t: 'enter', car: nearCarId });
+  }
+  function driveCar(dt) {
+    var active = joined && me.alive && locked() && !chatting();
+    var thr = 0, steer = 0, brake = false;
+    if (active) {
+      if (keys.KeyW) thr++; if (keys.KeyS) thr--; if (keys.KeyD) steer++; if (keys.KeyA) steer--;
+      if (keys.Space) brake = true;
+      if (IS_TOUCH && Math.hypot(tc.move.x, tc.move.y) > 0.15) { steer += tc.move.x; thr -= tc.move.y; }
+    }
+    thr = clamp(thr, -1, 1); steer = clamp(steer, -1, 1);
+    var sp = car.sp;
+    if (thr > 0) sp += thr * 14 * Math.max(0.12, 1 - sp / 34) * dt;
+    else if (thr < 0) { if (sp > 0.5) sp -= 28 * dt; else sp = Math.max(-9, sp - 8 * dt); }
+    else sp -= Math.sign(sp) * Math.min(Math.abs(sp), 5 * dt);
+    if (brake) sp *= Math.max(0, 1 - 3 * dt);
+    var turn = steer * 1.9 * clamp(Math.abs(sp) / 6, 0, 1) / (1 + Math.abs(sp) / 22);
+    car.yaw -= turn * (sp >= 0 ? 1 : -1) * dt;
+    var fx = -Math.sin(car.yaw), fz = -Math.cos(car.yaw);
+    car.x += fx * sp * dt; car.z += fz * sp * dt;
+    // toqquşma: ön və arxa iki dairə
+    var p1 = { x: car.x + fx * 1.2, y: 0, z: car.z + fz * 1.2 }, p2 = { x: car.x - fx * 1.2, y: 0, z: car.z - fz * 1.2 };
+    var a1 = p1.x, b1 = p1.z, a2 = p2.x, b2 = p2.z;
+    S.resolve(p1, undefined, 1.0); S.resolve(p2, undefined, 1.0);
+    var sx = ((p1.x - a1) + (p2.x - a2)) / 2, sz = ((p1.z - b1) + (p2.z - b2)) / 2;
+    if (Math.hypot(sx, sz) > 0.01) {
+      car.x += sx; car.z += sz;
+      if (Math.abs(sp) > 4) { me.shake = Math.max(me.shake, 0.25); tone(90, 0.15, 0.25, 'square'); }
+      sp *= 0.6;
+    }
+    car.sp = sp;
+    me.x = car.x; me.z = car.z; me.y = 0; me.vx = me.vz = 0;
+    me.sprint = false;
+  }
+  function chaseCam(dt) {
+    car.camYaw += angDiff(car.camYaw, car.yaw) * Math.min(1, dt * 4);
+    var fx = -Math.sin(car.camYaw), fz = -Math.cos(car.camYaw);
+    camera.position.set(car.x - fx * 7.2, 3.4, car.z - fz * 7.2);
+    camera.lookAt(car.x + fx * 3, 1.3, car.z + fz * 3);
+  }
+  function engineUpdate() {
+    var on = !!car.id && me.alive;
+    if (!on && !engine) return;
+    var a = audio();
+    if (!a) return;
+    if (on && !engine) {
+      var o = a.createOscillator(), g = a.createGain();
+      o.type = 'sawtooth'; o.frequency.value = 50; g.gain.value = 0;
+      o.connect(g); g.connect(dest(a)); o.start();
+      engine = { o: o, g: g };
+    }
+    if (engine) {
+      engine.g.gain.value = on && settings.sound && settings.steps ? 0.035 + Math.min(1, Math.abs(car.sp) / 34) * 0.04 : 0;
+      engine.o.frequency.value = 45 + Math.abs(car.sp) * 5.5;
+    }
+  }
+
   /* ======================= Şəbəkə ======================= */
   function send(o) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); }
 
@@ -1387,6 +1536,7 @@
     welcome: function (m) {
       if (m.map && m.map !== curMapId) buildWorld(m.map);
       clearLoot();
+      clearCars();
       (m.loot || []).forEach(function (l) { addLoot(l[0], l[1], l[2], l[3]); });
       joined = true;
       me.id = m.id; mode = m.mode; myTeam = m.team; roomCode = m.room;
@@ -1396,6 +1546,7 @@
       if (IS_TOUCH) { $('tc').hidden = false; applyLayout(); }
       document.body.classList.remove('ads', 'scoped');
       updateInfo();
+      if (m.pick) openLoadout();
       updatePause();
       $('invlink').textContent = location.origin + '/?room=' + roomCode;
       try { history.replaceState(null, '', '?room=' + roomCode); } catch (e) {}
@@ -1410,6 +1561,7 @@
       me.vx = me.vz = me.vy = 0; me.onGround = true;
       me.seq = m.seq; me.hp = 100; me.alive = true;
       applyInv(m);
+      closeLoadout();
       me.crouch = false; me.eye = S.EYE;
       tc.crouch = false; tc.sprint = false;
       auto.on = false; auto.fwdT = 0; auto.blockT = 0;
@@ -1449,6 +1601,7 @@
         r.crouch = !!(e[8] & 4);
         r.wi = e[7] | 0;
         r.armed = !(e[8] & 8);
+        r.inCar = !!(e[8] & 16);
         if (e[9] != null) r.hm = e[9];
         r.buf.push({ t: now, x: e[1], y: e[2], z: e[3], yaw: e[4], pitch: e[5] });
         if (r.buf.length > 12) r.buf.shift();
@@ -1457,6 +1610,7 @@
         if (!seen[r.id] && now > r.dyingUntil) removeRemote(r);
       });
       syncNades(m.g || []);
+      if (m.c) syncCars(m.c);
       updateScoreline();
     },
     shot: function (m) {
@@ -1501,7 +1655,7 @@
       tone(110, 0.18, 0.3, 'sawtooth');
     },
     kill: function (m) {
-      var wname = (W[m.w] && W[m.w].name) || (m.w === 'grenade' ? 'Qumbara' : '');
+      var wname = (W[m.w] && W[m.w].name) || (m.w === 'grenade' ? 'Qumbara' : m.w === 'car' ? 'Maşın' : '');
       var text = nameOf(m.k) + '  [' + wname + (m.head ? ' ◎' : '') + ']  ' + nameOf(m.v);
       addFeed(text, (m.k === me.id || m.v === me.id) ? 'me' : '');
       var r = remotes.get(m.v);
@@ -1514,7 +1668,9 @@
         me.alive = false; me.hp = 0; me.deadT = performance.now();
         me.fireHeld = false; me.ads = false;
         document.body.classList.remove('ads', 'scoped');
+        car.id = 0;
         if (!ended) showMsg('Öldün', mode === 'coop' ? 'Növbəti dalğada canlanacaqsan' : 'Tezliklə canlanacaqsan');
+        setTimeout(openLoadout, 1300);
       }
     },
     wave: function (m) {
@@ -1535,6 +1691,18 @@
       tone(990, 0.12, 0.2, 'triangle');
     },
     inv: function (m) { applyInv(m); },
+    drive: function (m) {
+      var o = cars.get(m.car);
+      if (!o) return;
+      car.id = m.car; car.x = o.x; car.z = o.z; car.yaw = o.yaw; car.camYaw = o.yaw; car.sp = 0;
+      me.fireHeld = false; me.ads = false; auto.on = false; auto.fwdT = 0;
+      document.body.classList.remove('ads', 'scoped');
+      showMsg('Maşındasan', IS_TOUCH ? 'Joystik: sür, DÜŞ: çıx' : 'W/S/A/D sür, Space əl əyləci, E düş', 2200);
+    },
+    exited: function (m) {
+      car.id = 0; car.sp = 0;
+      me.x = m.x; me.z = m.z; me.y = 0; me.seq = m.seq; me.vx = me.vz = 0; me.yaw = car.yaw;
+    },
     boom: function (m) { addBoom(m.p, performance.now()); },
     smoke: function (m) { addSmoke(m.p, m.ms, performance.now()); },
     msg: function (m) { showMsg(m.text, '', 3500); },
@@ -1569,6 +1737,7 @@
 
   setInterval(function () {
     if (!joined || !me.alive) return;
+    if (car.id) { send({ t: 'car', x: +car.x.toFixed(2), z: +car.z.toFixed(2), yaw: +car.yaw.toFixed(3), sp: +car.sp.toFixed(2) }); return; }
     send({ t: 'state', x: +me.x.toFixed(3), y: +me.y.toFixed(3), z: +me.z.toFixed(3),
       yaw: +me.yaw.toFixed(3), pitch: +me.pitch.toFixed(3), wi: me.wi, c: me.crouch ? 1 : 0, seq: me.seq });
   }, 50);
@@ -1577,6 +1746,75 @@
     var coop = $('mode').value === 'coop';
     if (coop) $('map').value = 'arena';
     $('map').disabled = coop;
+  });
+
+
+  /* ======================= Silah seçimi (arena) ======================= */
+  var LO_KEY = 'arena-loadout';
+  var SIDE_IDS = ['pistol', 'deagle'], MAIN_IDS = ['uzi', 'rifle', 'akm', 'dmr', 'lmg', 'shotgun', 'sniper', 'awm'];
+  var WTYPE = { pistol: 'Tapança', deagle: 'Güclü tapança', uzi: 'Avtomat pistolet', rifle: 'Avtomat', akm: 'Avtomat', dmr: 'Yarımavtomat snayper', lmg: 'Pulemyot', shotgun: 'Pompalı', sniper: 'Snayper', awm: 'Ağır snayper' };
+  var lo = { side: 'pistol', main: ['rifle', 'shotgun'] };
+  try {
+    var svl = JSON.parse(localStorage.getItem(LO_KEY) || 'null');
+    if (svl && SIDE_IDS.indexOf(svl.side) >= 0 && svl.main && svl.main.length === 2 && MAIN_IDS.indexOf(svl.main[0]) >= 0 && MAIN_IDS.indexOf(svl.main[1]) >= 0 && svl.main[0] !== svl.main[1]) lo = svl;
+  } catch (e) {}
+  function statBar(label, v) {
+    return '<div class="st"><em>' + label + '</em><i style="width:' + Math.round(clamp(v, 0.04, 1) * 100) + '%"></i></div>';
+  }
+  function buildLoadoutCards() {
+    function mk(id, host) {
+      var w = W[id], el = document.createElement('div');
+      el.className = 'wc'; el.setAttribute('data-id', id);
+      var dmg = w.dmg * (w.pellets > 1 ? w.pellets * 0.6 : 1);
+      el.innerHTML = '<b>' + w.name + '</b><span class="wt">' + WTYPE[id] + '</span>' +
+        statBar('Zədə', dmg / 110) + statBar('Sürət', 1000 / w.rate / 16) + statBar('Məsafə', w.range / 250) +
+        '<small>Dolu: ' + w.mag + '</small>';
+      el.addEventListener('click', function () { pickLo(id); });
+      host.appendChild(el);
+    }
+    SIDE_IDS.forEach(function (id) { mk(id, $('lo-side')); });
+    MAIN_IDS.forEach(function (id) { mk(id, $('lo-main')); });
+  }
+  function pickLo(id) {
+    if (SIDE_IDS.indexOf(id) >= 0) lo.side = id;
+    else {
+      var i = lo.main.indexOf(id);
+      if (i >= 0) lo.main.splice(i, 1);
+      else { lo.main.push(id); if (lo.main.length > 2) lo.main.shift(); }
+    }
+    renderLoadout();
+  }
+  function renderLoadout() {
+    var cards = document.querySelectorAll('#loadout .wc');
+    for (var i = 0; i < cards.length; i++) {
+      var id = cards[i].getAttribute('data-id');
+      cards[i].classList.toggle('sel', id === lo.side || lo.main.indexOf(id) >= 0);
+    }
+    var ok = lo.main.length === 2;
+    $('lo-go').disabled = !ok;
+    setText('lo-note', ok ? W[lo.side].name + ' + ' + W[lo.main[0]].name + ' + ' + W[lo.main[1]].name : 'İki əsas silah seçin (' + lo.main.length + '/2)');
+  }
+  function openLoadout() {
+    if (!joined || (S.map && S.map.loot)) return;
+    renderLoadout();
+    $('loadout').hidden = false;
+    $('loadout').scrollTop = 0;
+    try { document.exitPointerLock(); } catch (e) {}
+    updatePause();
+  }
+  function closeLoadout() { $('loadout').hidden = true; }
+  buildLoadoutCards();
+  renderLoadout();
+  $('lo-go').addEventListener('click', function () {
+    if (lo.main.length !== 2) return;
+    audio();
+    send({ t: 'loadout', side: lo.side, p1: lo.main[0], p2: lo.main[1] });
+    try { localStorage.setItem(LO_KEY, JSON.stringify(lo)); } catch (e) {}
+    closeLoadout();
+    goFullscreen();
+    lockPointer();
+    if (!me.alive) showMsg('Hazırsan', 'Doğulmaq üçün gözləyin...', 1500);
+    updatePause();
   });
 
   /* ======================= Giriş ======================= */
@@ -1600,8 +1838,27 @@
       }
     } catch (e) {}
   }
+  function toggleFullscreen() {
+    try {
+      if (document.fullscreenElement) { document.exitFullscreen(); return; }
+      var el = document.documentElement;
+      var p = el.requestFullscreen && el.requestFullscreen();
+      if (p && p.then) {
+        p.then(function () {
+          if (navigator.keyboard && navigator.keyboard.lock) navigator.keyboard.lock().catch(function () {});
+          if (IS_TOUCH && screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(function () {});
+        }).catch(function () {});
+      }
+    } catch (e) {}
+  }
+  if (!document.documentElement.requestFullscreen) $('fsbtn').hidden = true;
+  $('fsbtn').addEventListener('click', function (e) { e.stopPropagation(); toggleFullscreen(); });
+  document.addEventListener('fullscreenchange', function () {
+    $('fsbtn').textContent = document.fullscreenElement ? '✕' : '⛶';
+    $('fsbtn').title = document.fullscreenElement ? 'Tam ekrandan çıx' : 'Tam ekran';
+  });
   function updatePause() {
-    $('pause').hidden = IS_TOUCH || !(joined && !locked() && $('dc').hidden && !chatting());
+    $('pause').hidden = IS_TOUCH || !(joined && !locked() && $('dc').hidden && !chatting() && $('loadout').hidden);
   }
   document.addEventListener('pointerlockchange', updatePause);
   $('pause').addEventListener('click', function () { audio(); goFullscreen(); lockPointer(); });
@@ -1649,6 +1906,8 @@
     if (e.code === 'Tab') { boardHeld = true; updateBoardVisibility(); }
     else if (e.code === 'KeyR') startReload(performance.now());
     else if (e.code === 'Enter') { openChat(); e.preventDefault(); }
+    else if (e.code === 'KeyF') toggleFullscreen();
+    else if (e.code === 'KeyE') interact();
     else if (e.code === 'KeyG') throwNade('frag');
     else if (e.code === 'KeyH') throwNade('smoke');
     else if (/^Digit[0-9]$/.test(e.code)) switchWeapon((+e.code.slice(5) + 9) % 10);
@@ -1679,7 +1938,7 @@
     clickSound();
   }
   function tryFire(now) {
-    if (!me.alive || !locked() || chatting() || !me.own[me.wi]) return;
+    if (!me.alive || car.id || !locked() || chatting() || !me.own[me.wi]) return;
     var w = W[ORDER[me.wi]];
     if (me.reloading || now < me.switchEnd || now < me.lastFire + w.rate) return;
     if (!w.auto && !me.fireFresh) return;
@@ -1763,7 +2022,7 @@
 
     if (joined) {
       if (me.alive) {
-        move(dt);
+        if (car.id) driveCar(dt); else move(dt);
         if (me.reloading && now >= me.reloadEnd) { me.reloading = false; me.ammo[me.wi] = W[ORDER[me.wi]].mag; }
         if (me.fireHeld) tryFire(now);
       }
@@ -1780,7 +2039,9 @@
       var bob = me.onGround && me.alive ? Math.sin(bobT) * (me.sprint ? 0.04 : 0.025) * Math.min(1, speedNow / 5) : 0;
       me.shake = Math.max(0, me.shake - dt);
       var sh = me.shake > 0 ? (Math.random() - 0.5) * me.shake * 0.05 : 0;
-      if (me.alive) {
+      if (me.alive && car.id) {
+        chaseCam(dt);
+      } else if (me.alive) {
         camera.position.set(me.x, me.y + me.eye + bob, me.z);
         camera.rotation.set(me.pitch + sh, me.yaw, sh, 'YXZ');
       } else {
@@ -1792,7 +2053,7 @@
       // birinci şəxs silahı
       me.kick = Math.max(0, me.kick - dt * 0.6);
       for (var i = 0; i < vms.length; i++) vms[i].g.visible = (i === me.wi);
-      drawVM = me.alive && !scoped && !!me.own[me.wi];
+      drawVM = me.alive && !scoped && !!me.own[me.wi] && !car.id;
       var adsK = me.ads ? 1 : 0;
       var px = 0.24 * (1 - adsK), py = -0.24 + 0.07 * adsK, pz = -0.5 + 0.1 * adsK;
       var sway = Math.min(1, speedNow / 5) * (me.onGround ? 1 : 0.3);
@@ -1816,6 +2077,8 @@
       updateFx(now);
       updateLoot(now, dt);
       updateNadeMeshes();
+      updateCars(dt);
+      engineUpdate();
       updateEffects2(now);
       updateHUD();
     } else {
@@ -1904,6 +2167,7 @@
     }
     btn('tf', function () { me.fireHeld = true; me.fireFresh = true; }, function () { me.fireHeld = false; });
     btn('tj', function () { tc.jump = true; });
+    btn('te', function () { interact(); });
     btn('tg', function () { throwNade('frag'); });
     btn('th', function () { throwNade('smoke'); });
     btn('tr', function () { startReload(performance.now()); });
@@ -1931,8 +2195,8 @@
   initTouch();
 
   /* ======================= Ayarlar və düymə düzənləyicisi ======================= */
-  var CTL_IDS = ['js', 'tf', 'tj', 'ta', 'tr', 'tcr', 'ts', 'tb', 'tg', 'th'];
-  var CTL_NAMES = { js: 'Joystik', tf: 'Atəş', tj: 'Tullan', ta: 'Nişan', tr: 'Doldur', tcr: 'Əyil', ts: 'Qaç', tb: 'Cədvəl', tg: 'Qumbara', th: 'Tüstü' };
+  var CTL_IDS = ['js', 'tf', 'tj', 'ta', 'tr', 'tcr', 'ts', 'tb', 'tg', 'th', 'te'];
+  var CTL_NAMES = { js: 'Joystik', tf: 'Atəş', tj: 'Tullan', ta: 'Nişan', tr: 'Doldur', tcr: 'Əyil', ts: 'Qaç', tb: 'Cədvəl', tg: 'Qumbara', th: 'Tüstü', te: 'Maşın' };
   var layout = {};
   try {
     var lraw = JSON.parse(store.get('arena-layout', '{}'));

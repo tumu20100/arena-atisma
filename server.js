@@ -26,6 +26,18 @@ const LOOT_RESPAWN_MS = 45000;
 const DROP_LIFE_MS = 90000;
 const PICK_R = 1.4;
 const RIFLE = S.WEAPON_ORDER.indexOf('rifle');
+const SIDEARMS = ['pistol', 'deagle'];
+const PRIMARIES = ['uzi', 'rifle', 'akm', 'dmr', 'lmg', 'shotgun', 'sniper', 'awm'];
+const DEFAULT_LOADOUT = { side: 'pistol', p1: 'rifle', p2: 'shotgun' };
+const PICK_WAIT_MS = 25000;
+const CAR_MAX_SPEED = 34;
+function cleanLoadout(m) {
+  const side = SIDEARMS.includes(m.side) ? m.side : null;
+  const p1 = PRIMARIES.includes(m.p1) ? m.p1 : null;
+  const p2 = PRIMARIES.includes(m.p2) && m.p2 !== p1 ? m.p2 : null;
+  if (!side || !p1 || !p2) return null;
+  return { side, p1, p2 };
+}
 const NADE_FUSE = 3000, SMOKE_FUSE = 1400, SMOKE_MS = 15000, NADE_R = 8, NADE_DMG = 160;
 const noWeapons = () => S.WEAPON_ORDER.map(() => false);
 const allWeapons = () => S.WEAPON_ORDER.map(() => true);
@@ -178,6 +190,7 @@ class Room {
     this.nextLoot = 1;
     this.nades = [];
     this.nextNade = 1;
+    this.cars = (this.map.cars || []).map((c, i) => ({ id: i + 1, x: c[0], z: c[1], yaw: c[2], sp: 0, driver: 0, lastAt: 0 }));
     if (this.map.loot) {
       for (const sp of this.map.lootSpots) {
         this.loot.push({ id: this.nextLoot++, ty: S.rollLoot(Math.random), x: sp[0], z: sp[1], alive: true, at: 0, temp: false });
@@ -214,7 +227,7 @@ class Room {
       x: 0, y: 0, z: 0, yaw: 0, pitch: 0, hp: 100, alive: false,
       kills: 0, deaths: 0, wi: 0, seq: 0, lastFire: {}, lastState: Date.now(),
       lastHurt: 0, respawnAt: 0, crouch: false, helmet: 0, armor: 0, hl: 0, al: 0, gr: 0, sm: 0, sc: false, su: false, lastThrow: 0,
-      own: allWeapons()
+      own: allWeapons(), loadout: null, needsPick: false, ready: false, pickDeadline: 0, car: 0
     };
     if (this.mode === 'tdm') {
       let red = 0, blue = 0;
@@ -224,14 +237,16 @@ class Room {
     this.players.set(p.id, p);
     conn.player = p;
     conn.room = this;
-    conn.send({ t: 'welcome', id: p.id, room: this.code, mode: this.mode, team: p.team, map: this.map.id,
+    conn.send({ t: 'welcome', id: p.id, room: this.code, mode: this.mode, team: p.team, map: this.map.id, pick: !this.map.loot, cars: this.cars.map((c) => c.id),
       loot: this.loot.filter((l) => l.alive).map((l) => [l.id, l.ty, r1(l.x), r1(l.z)]) });
-    this.spawn(p);
+    if (this.map.loot) this.spawn(p);
+    else { p.needsPick = true; p.ready = false; p.pickDeadline = Date.now() + PICK_WAIT_MS; }
     this.sendRoster();
     return p;
   }
 
   remove(p) {
+    this.freeCar(p);
     this.players.delete(p.id);
     if (this.players.size === 0) {
       clearInterval(this.timer);
@@ -269,11 +284,15 @@ class Room {
   spawn(p) {
     const sp = this.pickSpawn();
     p.x = sp[0]; p.z = sp[1]; p.y = 0;
-    p.hp = 100; p.alive = true; p.respawnAt = 0;
+    p.hp = 100; p.alive = true; p.respawnAt = 0; p.needsPick = false; p.pickFromDeath = false; p.car = 0;
     if (this.map.loot) {
       p.hl = 0; p.al = 0; p.helmet = 0; p.armor = 0; p.own = noWeapons(); p.gr = 0; p.sm = 0; p.sc = false; p.su = false;
     } else {
-      p.hl = 2; p.al = 2; p.helmet = S.HELMETS[2].hp; p.armor = S.ARMORS[2].hp; p.own = allWeapons(); p.gr = 2; p.sm = 1; p.sc = false; p.su = false;
+      p.hl = 2; p.al = 2; p.helmet = S.HELMETS[2].hp; p.armor = S.ARMORS[2].hp; p.gr = 2; p.sm = 1; p.sc = false; p.su = false;
+      p.own = noWeapons();
+      const L = p.loadout || DEFAULT_LOADOUT;
+      for (const id of [L.side, L.p1, L.p2]) p.own[S.WEAPON_ORDER.indexOf(id)] = true;
+      p.wi = S.WEAPON_ORDER.indexOf(L.p1);
     }
     p.crouch = false;
     p.seq++; p.lastState = Date.now();
@@ -391,6 +410,70 @@ class Room {
     } else return false;
     p.conn.send(Object.assign({ t: 'pick', ty: l.ty }, invOf(p)));
     return true;
+  }
+
+  /* ---- maşınlar ---- */
+  freeCar(p) {
+    if (!p.car) return;
+    const c = this.cars.find((q) => q.id === p.car);
+    if (c) { c.driver = 0; c.sp = 0; }
+    p.car = 0;
+  }
+
+  enterCar(p, id) {
+    if (!p.alive || p.car || this.state !== 'play') return;
+    const c = this.cars.find((q) => q.id === (id | 0));
+    if (!c || c.driver) return;
+    if (Math.hypot(c.x - p.x, c.z - p.z) > 5) return;
+    c.driver = p.id; c.sp = 0; c.lastAt = Date.now();
+    p.car = c.id; p.crouch = false;
+    p.conn.send({ t: 'drive', car: c.id });
+  }
+
+  exitCar(p) {
+    if (!p.car) return;
+    const c = this.cars.find((q) => q.id === p.car);
+    if (c) {
+      const pos = { x: c.x + Math.cos(c.yaw) * 2.4, y: 0, z: c.z - Math.sin(c.yaw) * 2.4 };
+      S.resolve(pos, this.map);
+      p.x = pos.x; p.z = pos.z; p.y = 0;
+      c.driver = 0; c.sp = 0;
+    }
+    p.car = 0;
+    p.seq++; p.lastState = Date.now();
+    p.conn.send({ t: 'exited', x: r1(p.x), z: r1(p.z), seq: p.seq });
+  }
+
+  carState(p, m) {
+    const c = p.car && this.cars.find((q) => q.id === p.car);
+    if (!c || c.driver !== p.id || !p.alive) return;
+    const now = Date.now();
+    const dt = Math.min(0.5, Math.max(0.02, (now - c.lastAt) / 1000));
+    c.lastAt = now;
+    let x = Number(m.x), z = Number(m.z), yaw = Number(m.yaw), sp = Number(m.sp);
+    if (!isFinite(x) || !isFinite(z) || !isFinite(yaw) || !isFinite(sp)) return;
+    const maxd = CAR_MAX_SPEED * dt * 1.4 + 1;
+    const d = Math.hypot(x - c.x, z - c.z);
+    if (d > maxd) { x = c.x + (x - c.x) / d * maxd; z = c.z + (z - c.z) / d * maxd; }
+    const half = this.map.half;
+    c.x = S.clamp(x, -half + 1, half - 1); c.z = S.clamp(z, -half + 1, half - 1);
+    c.yaw = yaw; c.sp = S.clamp(sp, -12, CAR_MAX_SPEED);
+    p.x = c.x; p.z = c.z; p.y = 0; p.yaw = yaw; p.lastState = now;
+  }
+
+  updateCars(now) {
+    for (const c of this.cars) {
+      if (!c.driver || Math.abs(c.sp) < 6) continue;
+      const driver = this.players.get(c.driver);
+      if (!driver || !driver.alive) continue;
+      for (const e of this.entities()) {
+        if (e === driver || !this.isEnemy(driver, e) || e.car) continue;
+        if (e.hitByCar && now - e.hitByCar < 700) continue;
+        if (Math.hypot(e.x - c.x, e.z - c.z) > 2.0) continue;
+        e.hitByCar = now;
+        this.damage(e, driver, Math.min(120, Math.abs(c.sp) * 4.5), false, 'car', false);
+      }
+    }
   }
 
   /* ---- qumbaralar ---- */
@@ -580,6 +663,8 @@ class Room {
       this.bots = this.bots.filter((b) => b !== victim);
     } else {
       victim.respawnAt = this.mode === 'coop' ? 0 : Date.now() + RESPAWN_MS;
+      if (!this.map.loot) { victim.needsPick = true; victim.pickFromDeath = true; victim.ready = false; victim.pickDeadline = Date.now() + RESPAWN_MS + PICK_WAIT_MS; }
+      this.freeCar(victim);
     }
     this.rosterDirty = true;
 
@@ -705,8 +790,13 @@ class Room {
       this.updateBots(now);
       this.updateLoot(now);
       this.updateNades(now);
+      this.updateCars(now);
       for (const p of this.players.values()) {
-        if (!p.alive && p.respawnAt && now >= p.respawnAt) this.spawn(p);
+        if (p.alive) continue;
+        if (p.needsPick) {
+          if (this.mode === 'coop' && p.pickFromDeath) continue; // dalğa başlayanda doğulur
+          if ((p.ready && now >= p.respawnAt) || now >= p.pickDeadline) this.spawn(p);
+        } else if (p.respawnAt && now >= p.respawnAt) this.spawn(p);
       }
     }
     for (const p of this.players.values()) {
@@ -716,14 +806,14 @@ class Room {
 
     const arr = [];
     for (const p of this.players.values()) {
-      arr.push([p.id, r2(p.x), r2(p.y), r2(p.z), r2(p.yaw), r2(p.pitch), Math.round(p.hp), p.wi, (p.alive ? 1 : 0) | (p.crouch ? 4 : 0) | (p.own.some(Boolean) ? 0 : 8), Math.round(p.helmet), Math.round(p.armor)]);
+      arr.push([p.id, r2(p.x), r2(p.y), r2(p.z), r2(p.yaw), r2(p.pitch), Math.round(p.hp), p.wi, (p.alive ? 1 : 0) | (p.crouch ? 4 : 0) | (p.own.some(Boolean) ? 0 : 8) | (p.car ? 16 : 0), Math.round(p.helmet), Math.round(p.armor)]);
     }
     for (const b of this.bots) {
       arr.push([b.id, r2(b.x), r2(b.y), r2(b.z), r2(b.yaw), 0, Math.round(b.hp), RIFLE, 3]);
     }
     const gl = this.nades.map((n) => [n.id, n.k === 'frag' ? 0 : 1, r2(n.x), r2(n.y), r2(n.z)]);
     this.broadcast({
-      t: 'snap', p: arr, g: gl,
+      t: 'snap', p: arr, g: gl, c: this.cars.map((c) => [c.id, r1(c.x), r1(c.z), r2(c.yaw), r1(c.sp), c.driver]),
       m: { s: this.state, r: this.score.red, b: this.score.blue, wv: this.wave, bots: this.bots.length }
     });
   }
@@ -760,7 +850,7 @@ function onMessage(conn, raw) {
   if (!p || !room) return;
 
   if (m.t === 'state') {
-    if (!p.alive || m.seq !== p.seq) return;
+    if (!p.alive || m.seq !== p.seq || p.car) return;
     const now = Date.now();
     const dt = Math.min(0.5, Math.max(0.01, (now - p.lastState) / 1000));
     p.lastState = now;
@@ -779,6 +869,16 @@ function onMessage(conn, raw) {
     const wi = m.wi | 0;
     if (wi >= 0 && wi < S.WEAPON_ORDER.length && p.own[wi]) p.wi = wi;
     p.crouch = m.c === 1;
+  } else if (m.t === 'loadout') {
+    const L = cleanLoadout(m);
+    if (L) p.loadout = L;
+    p.ready = true;
+  } else if (m.t === 'enter') {
+    room.enterCar(p, m.car);
+  } else if (m.t === 'exit') {
+    room.exitCar(p);
+  } else if (m.t === 'car') {
+    room.carState(p, m);
   } else if (m.t === 'throw') {
     room.handleThrow(p, m);
   } else if (m.t === 'shoot') {

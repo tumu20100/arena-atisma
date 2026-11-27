@@ -1,6 +1,6 @@
 # Arena Atışma
 
-Dostlarınla birgə və ya bir-birinizə qarşı oynaya biləcəyin 3D atışma oyunu. Birinci şəxs görünüşü, 4 silah, 3 rejim, 12 oyunçuya qədər.
+Dostlarınla birgə və ya bir-birinizə qarşı oynaya biləcəyin 3D atışma oyunu. Birinci şəxs görünüşü, 10 silah, 3 rejim, 12 oyunçuya qədər.
 
 ## 1. Qurulum (2 dəqiqə)
 
@@ -47,8 +47,10 @@ Raund bitəndən 8 saniyə sonra yeni oyun avtomatik başlayır.
 
 Lobbidə otaq yaradanda xəritə seçilir (qoşulanlar otağın xəritəsini görür).
 
-- **Arena**: böyüdülmüş beton meydança. Hamı silahlı, kaskla və bədənliklə başlayır. Birgə (bot) rejimi yalnız burada işləyir.
-- **Açıq dünya**: 180×180 metrlik ərazi, 18 ev, ağaclar, daşlar, qutular. Hamı **silahsız, kasksız, bədənliksiz** başlayır. Evlərin içində və qutuların yanında yerdə əşyalar var: 10 silah, 3 səviyyəli kask və bədənlik, tibbi çanta, bandaj, qumbara, tüstü, durbin, susdurucu. Üstünə yaxınlaşmaq kifayətdir, avtomatik götürülür. Götürülən əşya 45 saniyəyə yenidən çıxır (təsadüfi növdə). Ölən oyunçunun ən güclü silahı, kaskı və bədənliyi düşür, onları da götürə bilərsiniz. Evlərin pəncərələrindən atəş etmək olar.
+- **Arena**: böyüdülmüş beton meydança. Hər oyun başlayanda və hər ölümdən sonra **silah seçim ekranı** açılır: 1 tapança + 2 əsas silah seçirsən, "Başla" basırsan. Seçim yadda qalır. Birgə (bot) rejimi yalnız burada işləyir.
+- **Açıq dünya**: 700×700 metrlik nəhəng ərazi (əvvəlkindən ~15 dəfə böyük), ~220 ev, kəndlər, meşələr, daşlar, qutular. Hamı **silahsız, kasksız, bədənliksiz** başlayır. Evlərin içində və qutuların yanında yerdə əşyalar var (~650 yer): 10 silah, 3 səviyyəli kask və bədənlik, tibbi çanta, bandaj, qumbara, tüstü, durbin, susdurucu. Üstünə yaxınlaşmaq kifayətdir, avtomatik götürülür. Götürülən əşya 45 saniyəyə yenidən çıxır. Ölən oyunçunun ən güclü silahı, kaskı və bədənliyi düşür.
+- **Maşın** (açıq dünyada 8 ədəd): yaxınlaşıb **E** bas, minirsən. W/S qaz-əyləc, A/D sükan, Boşluq əl əyləci, yenə E ilə düşürsən. Maşınla adam vurmaq zədə verir. Telefonda ekrandakı **MİN/DÜŞ** düyməsi var.
+
 
 ## 4. İdarəetmə
 
@@ -67,6 +69,8 @@ Lobbidə otaq yaradanda xəritə seçilir (qoşulanlar otağın xəritəsini gö
 | R | doldurmaq |
 | Tab (basılı saxla) | xal cədvəli |
 | Enter | söhbət |
+| E | maşına min / maşından düş |
+| F | tam ekran (ekrandakı ⛶ düyməsi də var) |
 | Esc | fasilə (buradan Ayarlara girmək olar) |
 
 ## 5. Silahlar (10 ədəd)
