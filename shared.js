@@ -266,7 +266,10 @@
   /* ---------------- Loot ---------------- */
   var LOOT_TYPES = ['pistol', 'deagle', 'uzi', 'rifle', 'akm', 'dmr', 'lmg', 'shotgun', 'sniper', 'awm',
     'helmet1', 'helmet2', 'helmet3', 'armor1', 'armor2', 'armor3', 'medkit', 'bandage', 'grenade', 'smoke', 'scope', 'supp'];
-  var LOOT_WEIGHTS = [10, 5, 8, 8, 7, 4, 3, 8, 4, 1.5, 9, 5, 1.5, 9, 5, 1.5, 6, 10, 9, 6, 4, 4];
+  // Nadirlik: silah nə qədər güclüdürsə, bir o qədər az tapılır.
+  // pistol, deagle, uzi, rifle, akm, dmr, lmg, shotgun, sniper, awm
+  var LOOT_WEIGHTS = [12, 6, 9, 4.5, 2, 1.5, 2.5, 5, 0.9, 0.35, 9, 5, 1.5, 9, 5, 1.5, 6, 10, 9, 6, 4, 4];
+  var MAX_SLOTS = 3;
   function rollLoot(rand) {
     var tot = 0, i;
     for (i = 0; i < LOOT_WEIGHTS.length; i++) tot += LOOT_WEIGHTS[i];
@@ -376,7 +379,7 @@
   var api = {
     EYE: EYE, HEIGHT: HEIGHT, RADIUS: RADIUS, STEP: STEP,
     CROUCH_EYE: CROUCH_EYE, CROUCH_HEIGHT: CROUCH_HEIGHT, HELMETS: HELMETS, ARMORS: ARMORS, MAX_GRENADES: MAX_GRENADES, MAX_SMOKES: MAX_SMOKES,
-    WEAPONS: WEAPONS, WEAPON_ORDER: WEAPON_ORDER, MAPS: MAPS, LOOT_TYPES: LOOT_TYPES, rollLoot: rollLoot, rng: rng,
+    MAX_SLOTS: MAX_SLOTS, WEAPONS: WEAPONS, WEAPON_ORDER: WEAPON_ORDER, MAPS: MAPS, LOOT_TYPES: LOOT_TYPES, rollLoot: rollLoot, rng: rng,
     resolve: resolve, groundAt: groundAt, rayBox: rayBox, rayCyl: rayCyl, castWorld: castWorld, clamp: clamp,
     setMap: function (id) {
       cur = MAPS[id] || ARENA;

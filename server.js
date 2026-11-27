@@ -327,7 +327,7 @@ class Room {
   dropLoot(p) {
     if (!this.map.loot) return;
     const items = [];
-    for (let i = S.WEAPON_ORDER.length - 1; i >= 0; i--) if (p.own[i]) { items.push(S.WEAPON_ORDER[i]); break; }
+    for (let i = S.WEAPON_ORDER.length - 1; i >= 0; i--) if (p.own[i]) items.push(S.WEAPON_ORDER[i]);
     if (p.helmet > 0 && p.hl > 0) items.push('helmet' + p.hl);
     if (p.armor > 0 && p.al > 0) items.push('armor' + p.al);
     if (p.sc) items.push('scope');
@@ -341,6 +341,20 @@ class Room {
       this.loot.push(l);
       this.broadcast({ t: 'loot', id: l.id, a: 1, ty: l.ty, x: r1(l.x), z: r1(l.z) });
     });
+  }
+
+  dropWeapon(p) {
+    if (!this.map.loot || !p.alive || p.car || !p.own[p.wi]) return;
+    const ty = S.WEAPON_ORDER[p.wi];
+    p.own[p.wi] = false;
+    const half = this.map.half, now = Date.now();
+    const l = { id: this.nextLoot++, ty, x: S.clamp(p.x + Math.sin(p.yaw) * -1.8, -half + 1, half - 1), z: S.clamp(p.z + Math.cos(p.yaw) * -1.8, -half + 1, half - 1),
+      alive: true, at: now + DROP_LIFE_MS, temp: true, noPick: p.id, noPickUntil: now + 2500 };
+    this.loot.push(l);
+    const nx = p.own.findIndex(Boolean);
+    if (nx >= 0) p.wi = nx;
+    this.broadcast({ t: 'loot', id: l.id, a: 1, ty: l.ty, x: r1(l.x), z: r1(l.z) });
+    p.conn.send(Object.assign({ t: 'inv' }, invOf(p)));
   }
 
   updateLoot(now) {
@@ -362,6 +376,7 @@ class Room {
       if (!p.alive) continue;
       for (const l of this.loot) {
         if (!l.alive) continue;
+        if (l.noPick === p.id && now < l.noPickUntil) continue;
         if (Math.abs(p.x - l.x) > PICK_R || Math.abs(p.z - l.z) > PICK_R || Math.hypot(p.x - l.x, p.z - l.z) > PICK_R) continue;
         if (this.tryPick(p, l)) {
           l.alive = false;
@@ -376,7 +391,7 @@ class Room {
     const wi = S.WEAPON_ORDER.indexOf(l.ty);
     const m = /^(helmet|armor)([123])$/.exec(l.ty);
     if (wi >= 0) {
-      if (p.own[wi]) return false;
+      if (p.own[wi] || p.own.filter(Boolean).length >= S.MAX_SLOTS) return false;
       p.own[wi] = true;
     } else if (m) {
       const lv = +m[2];
@@ -873,6 +888,8 @@ function onMessage(conn, raw) {
     const L = cleanLoadout(m);
     if (L) p.loadout = L;
     p.ready = true;
+  } else if (m.t === 'drop') {
+    room.dropWeapon(p);
   } else if (m.t === 'enter') {
     room.enterCar(p, m.car);
   } else if (m.t === 'exit') {

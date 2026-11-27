@@ -48,7 +48,9 @@ Raund bitəndən 8 saniyə sonra yeni oyun avtomatik başlayır.
 Lobbidə otaq yaradanda xəritə seçilir (qoşulanlar otağın xəritəsini görür).
 
 - **Arena**: böyüdülmüş beton meydança. Hər oyun başlayanda və hər ölümdən sonra **silah seçim ekranı** açılır: 1 tapança + 2 əsas silah seçirsən, "Başla" basırsan. Seçim yadda qalır. Birgə (bot) rejimi yalnız burada işləyir.
-- **Açıq dünya**: 700×700 metrlik nəhəng ərazi (əvvəlkindən ~15 dəfə böyük), ~220 ev, kəndlər, meşələr, daşlar, qutular. Hamı **silahsız, kasksız, bədənliksiz** başlayır. Evlərin içində və qutuların yanında yerdə əşyalar var (~650 yer): 10 silah, 3 səviyyəli kask və bədənlik, tibbi çanta, bandaj, qumbara, tüstü, durbin, susdurucu. Üstünə yaxınlaşmaq kifayətdir, avtomatik götürülür. Götürülən əşya 45 saniyəyə yenidən çıxır. Ölən oyunçunun ən güclü silahı, kaskı və bədənliyi düşür.
+- **Açıq dünya**: 700×700 metrlik nəhəng ərazi (əvvəlkindən ~15 dəfə böyük), ~220 ev, kəndlər, meşələr, daşlar, qutular. Hamı **silahsız, kasksız, bədənliksiz** başlayır. Evlərin içində və qutuların yanında yerdə əşyalar var (~650 yer): 10 silah, 3 səviyyəli kask və bədənlik, tibbi çanta, bandaj, qumbara, tüstü, durbin, susdurucu. Üstünə yaxınlaşmaq kifayətdir, avtomatik götürülür. Götürülən əşya 45 saniyəyə yenidən çıxır. Ölən oyunçunun daşıdığı bütün silahlar, kaskı və bədənliyi düşür.
+  - **3 slot:** eyni anda ən çox 3 silah daşıyırsan. Slotlar doludursa yerdəki silah götürülmür. **Q** (telefonda **AT** düyməsi) ilə əlindəki silahı yerə ata bilərsən, sonra başqasını götürərsən.
+  - **Nadirlik:** silah nə qədər güclüdürsə, bir o qədər az tapılır (ən çox P92, ən az AWM).
 - **Maşın** (açıq dünyada 8 ədəd): yaxınlaşıb **E** bas, minirsən. W/S qaz-əyləc, A/D sükan, Boşluq əl əyləci, yenə E ilə düşürsən. Maşınla adam vurmaq zədə verir. Telefonda ekrandakı **MİN/DÜŞ** düyməsi var.
 
 
@@ -70,6 +72,7 @@ Lobbidə otaq yaradanda xəritə seçilir (qoşulanlar otağın xəritəsini gö
 | Tab (basılı saxla) | xal cədvəli |
 | Enter | söhbət |
 | E | maşına min / maşından düş |
+| Q | silahı yerə at (açıq dünya, 3 slot) |
 | F | tam ekran (ekrandakı ⛶ düyməsi də var) |
 | Esc | fasilə (buradan Ayarlara girmək olar) |
 

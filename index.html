@@ -150,6 +150,8 @@ button.go:active { transform: translateY(3px); box-shadow: 0 1px 0 #a86f00; }
 .tb.mini { width: calc(56px * var(--s, 1)); height: calc(56px * var(--s, 1)); font-size: calc(10px * var(--s, 1)); top: 96px; }
 #te { display: none; left: max(14px, env(safe-area-inset-left, 0px)); top: 110px; width: calc(64px * var(--s, 1)); height: calc(64px * var(--s, 1)); }
 body.cartip #te, body.editing #te { display: flex; }
+#tq { display: none; left: max(14px, env(safe-area-inset-left, 0px)); top: 180px; width: calc(56px * var(--s, 1)); height: calc(56px * var(--s, 1)); }
+body.lootmap #tq, body.editing #tq { display: flex; }
 #hint { position: fixed; left: 50%; bottom: 22%; transform: translateX(-50%); font-weight: 700; letter-spacing: .08em; color: #fff; text-shadow: 0 1px 4px #000; pointer-events: none; z-index: 5; }
 #spd { position: fixed; right: 24px; bottom: 24px; font: 700 28px var(--font); color: #fff; text-shadow: 0 1px 6px #000; pointer-events: none; z-index: 5; }
 body.touch #spd { right: auto; left: 50%; transform: translateX(-50%); bottom: 18px; font-size: 22px; }
@@ -268,6 +270,7 @@ body.editing .sel { outline: 3px solid var(--amber) !important; background-color
     <div class="tb" id="ts" role="button">QAÇ</div>
     <div class="tb small" id="tb" role="button">CƏDVƏL</div>
     <div class="tb mini" id="te" role="button">MİN</div>
+    <div class="tb mini" id="tq" role="button">AT</div>
     <div class="tb mini" id="tg" role="button">BOMBA</div>
     <div class="tb mini" id="th" role="button">TÜSTÜ</div>
   </div>
@@ -306,7 +309,7 @@ body.editing .sel { outline: 3px solid var(--amber) !important; background-color
       <span><b>Sol klik</b> at</span><span><b>Sağ klik</b> nişan al</span>
       <span><b>Boşluq</b> tullan</span><span><b>Ctrl</b> sürətli qaç</span>
       <span><b>Shift</b> əyil</span><span><b>1 - 0</b> silah</span>
-      <span><b>E</b> maşına min/düş</span><span><b>F</b> tam ekran</span><span><b>R</b> doldur</span><span><b>G / H</b> qumbara / tüstü</span><span><b>Tab</b> xal cədvəli</span>
+      <span><b>E</b> maşına min/düş</span><span><b>Q</b> silahı at (3 slot)</span><span><b>F</b> tam ekran</span><span><b>R</b> doldur</span><span><b>G / H</b> qumbara / tüstü</span><span><b>Tab</b> xal cədvəli</span>
       <span><b>Enter</b> söhbət</span><span><b>Esc</b> fasilə</span>
     </div>
   </form>

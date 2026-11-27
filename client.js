@@ -585,6 +585,7 @@
     scene.fog.far = FOG[id] ? FOG[id][1] : 200;
     camera.far = id === 'island' ? 520 : 300;
     camera.updateProjectionMatrix();
+    document.body.classList.toggle('lootmap', !!map.loot);
     if (id === 'island') buildIsland(map); else buildArena(map);
   }
   buildWorld('arena');
@@ -1059,7 +1060,8 @@
   function updateHUD() {
     var w = W[ORDER[me.wi]];
     var armed = !!me.own[me.wi];
-    setText('wname', armed ? w.name : 'SİLAHSIZ');
+    var isLoot = !!(S.map && S.map.loot), nOwn = me.own.filter(Boolean).length;
+    setText('wname', armed ? w.name + (isLoot ? '  ·  ' + nOwn + '/' + S.MAX_SLOTS + '  ·  Q: at' : '') : 'SİLAHSIZ');
     var ammo = me.ammo[me.wi];
     setHTML('ammo', !armed ? '<small>Evlərdən silah tap</small>' : me.reloading ? 'DOLDURULUR' : ammo + '<small> / ' + w.mag + '</small>');
     $('ammo').classList.toggle('low', armed && !me.reloading && ammo <= Math.ceil(w.mag * 0.25));
@@ -1690,7 +1692,10 @@
       tone(660, 0.08, 0.2, 'triangle');
       tone(990, 0.12, 0.2, 'triangle');
     },
-    inv: function (m) { applyInv(m); },
+    inv: function (m) {
+      applyInv(m);
+      if (!me.own[me.wi]) { var nx = me.own.indexOf(true); if (nx >= 0) { me.wi = nx; me.reloading = false; me.ads = false; document.body.classList.remove('ads', 'scoped'); } }
+    },
     drive: function (m) {
       var o = cars.get(m.car);
       if (!o) return;
@@ -1908,6 +1913,7 @@
     else if (e.code === 'Enter') { openChat(); e.preventDefault(); }
     else if (e.code === 'KeyF') toggleFullscreen();
     else if (e.code === 'KeyE') interact();
+    else if (e.code === 'KeyQ') dropWeapon();
     else if (e.code === 'KeyG') throwNade('frag');
     else if (e.code === 'KeyH') throwNade('smoke');
     else if (/^Digit[0-9]$/.test(e.code)) switchWeapon((+e.code.slice(5) + 9) % 10);
@@ -1921,6 +1927,10 @@
   function openChat() { var c = $('chat'); c.hidden = false; c.value = ''; c.focus(); keys = {}; me.fireHeld = false; }
   function closeChat() { var c = $('chat'); c.hidden = true; c.blur(); updatePause(); }
 
+  function dropWeapon() {
+    if (!joined || !me.alive || car.id || !S.map || !S.map.loot || !me.own[me.wi]) return;
+    send({ t: 'drop' });
+  }
   function switchWeapon(i) {
     if (!me.alive || i === me.wi || i < 0 || i >= ORDER.length || !me.own[i]) return;
     me.wi = i;
@@ -2168,6 +2178,7 @@
     btn('tf', function () { me.fireHeld = true; me.fireFresh = true; }, function () { me.fireHeld = false; });
     btn('tj', function () { tc.jump = true; });
     btn('te', function () { interact(); });
+    btn('tq', function () { dropWeapon(); });
     btn('tg', function () { throwNade('frag'); });
     btn('th', function () { throwNade('smoke'); });
     btn('tr', function () { startReload(performance.now()); });
@@ -2195,8 +2206,8 @@
   initTouch();
 
   /* ======================= Ayarlar və düymə düzənləyicisi ======================= */
-  var CTL_IDS = ['js', 'tf', 'tj', 'ta', 'tr', 'tcr', 'ts', 'tb', 'tg', 'th', 'te'];
-  var CTL_NAMES = { js: 'Joystik', tf: 'Atəş', tj: 'Tullan', ta: 'Nişan', tr: 'Doldur', tcr: 'Əyil', ts: 'Qaç', tb: 'Cədvəl', tg: 'Qumbara', th: 'Tüstü', te: 'Maşın' };
+  var CTL_IDS = ['js', 'tf', 'tj', 'ta', 'tr', 'tcr', 'ts', 'tb', 'tg', 'th', 'te', 'tq'];
+  var CTL_NAMES = { js: 'Joystik', tf: 'Atəş', tj: 'Tullan', ta: 'Nişan', tr: 'Doldur', tcr: 'Əyil', ts: 'Qaç', tb: 'Cədvəl', tg: 'Qumbara', th: 'Tüstü', te: 'Maşın', tq: 'Silah at' };
   var layout = {};
   try {
     var lraw = JSON.parse(store.get('arena-layout', '{}'));
