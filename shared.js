@@ -90,11 +90,9 @@
   })();
 
   /* --- 2. Açıq dünya: kəndlər, tək evlər, meşələr, maşınlar (700x700 m) --- */
-  var ISLAND = newMap('island', 350, 'Açıq dünya');
-  ISLAND.loot = true;
-  ISLAND.cars = [];
-  (function () {
-    var m = ISLAND, r = rng(7), HALF_I = m.half;
+  // Açıq xəritə generatoru (açıq dünya və zombi şəhəri üçün). Eyni toxum = server və klientdə eyni xəritə.
+  function genOpen(m, seed, cfg) {
+    var r = rng(seed), HALF_I = m.half;
     outerWalls(m);
 
     function seg(ax, fixed, a, b, y0, y1, c) {
@@ -134,20 +132,20 @@
       return true;
     }
     var villages = [];
-    for (var vt = 0; vt < 600 && villages.length < 16; vt++) {
-      var vx = (r() * 2 - 1) * (HALF_I - 70), vz = (r() * 2 - 1) * (HALF_I - 70), okv = true;
-      for (var vi = 0; vi < villages.length; vi++) if (Math.hypot(villages[vi][0] - vx, villages[vi][1] - vz) < 110) okv = false;
+    for (var vt = 0; vt < 600 && villages.length < cfg.vill; vt++) {
+      var vx = (r() * 2 - 1) * (HALF_I - cfg.vmargin), vz = (r() * 2 - 1) * (HALF_I - cfg.vmargin), okv = true;
+      for (var vi = 0; vi < villages.length; vi++) if (Math.hypot(villages[vi][0] - vx, villages[vi][1] - vz) < cfg.vsp) okv = false;
       if (okv) villages.push([vx, vz]);
     }
     villages.forEach(function (v) {
-      var n = 8 + ((r() * 6) | 0), placed = 0;
+      var n = cfg.vn + ((r() * cfg.vr) | 0), placed = 0;
       for (var k = 0; k < 120 && placed < n; k++) {
-        var ang = r() * Math.PI * 2, rad = 8 + Math.sqrt(r()) * 50;
+        var ang = r() * Math.PI * 2, rad = 8 + Math.sqrt(r()) * cfg.vrad;
         if (tryHouse(v[0] + Math.cos(ang) * rad, v[1] + Math.sin(ang) * rad, 8)) placed++;
       }
     });
-    for (var lt = 0, lone = 0; lt < 800 && lone < 60; lt++) {
-      if (tryHouse((r() * 2 - 1) * (HALF_I - 30), (r() * 2 - 1) * (HALF_I - 30), 16)) lone++;
+    for (var lt = 0, lone = 0; lt < 800 && lone < cfg.lone; lt++) {
+      if (tryHouse((r() * 2 - 1) * (HALF_I - 30), (r() * 2 - 1) * (HALF_I - 30), cfg.lgap)) lone++;
     }
 
     H.forEach(function (h, i) {
@@ -211,15 +209,15 @@
     }
 
     // maşınlar
-    for (var ct = 0; ct < 800 && m.cars.length < 8; ct++) {
+    for (var ct = 0; ct < 800 && m.cars.length < cfg.cars; ct++) {
       var cx2 = (r() * 2 - 1) * (HALF_I - 40), cz2 = (r() * 2 - 1) * (HALF_I - 40);
-      if (nearHouse(cx2, cz2, 8) || nearSpawn(cx2, cz2, 25) || !obstFree(cx2, cz2, 40)) continue;
+      if (nearHouse(cx2, cz2, 8) || nearSpawn(cx2, cz2, 25) || !obstFree(cx2, cz2, cfg.cdist)) continue;
       m.cars.push([Math.round(cx2), Math.round(cz2), r() * Math.PI * 2]);
       obst.push([cx2, cz2, 6]);
     }
     // açıq havada qutular və loot
     var crates = 0;
-    for (var tries = 0; tries < 2000 && crates < 70; tries++) {
+    for (var tries = 0; tries < 2000 && crates < cfg.crates; tries++) {
       var x = (r() * 2 - 1) * (HALF_I - 20), z = (r() * 2 - 1) * (HALF_I - 20);
       if (nearHouse(x, z, 5) || nearSpawn(x, z, 12) || !obstFree(x, z, 4)) continue;
       addBox(m, x + 1.3, z, 1.2, 1.2, 1.0, { kind: 'crate' });
@@ -229,7 +227,7 @@
       crates++;
     }
     // daşlar
-    for (var t2 = 0, rocks = 0; t2 < 2000 && rocks < 140; t2++) {
+    for (var t2 = 0, rocks = 0; t2 < 2000 && rocks < cfg.rocks; t2++) {
       var rx = (r() * 2 - 1) * (HALF_I - 10), rz = (r() * 2 - 1) * (HALF_I - 10);
       if (nearHouse(rx, rz, 4) || nearSpawn(rx, rz, 8) || !obstFree(rx, rz, 3)) continue;
       var rs = 1.6 + r() * 1.8;
@@ -239,14 +237,14 @@
     }
     // ağaclar: meşə kütlələri + tək ağaclar
     var forests = [];
-    for (var ft = 0; ft < 40; ft++) forests.push([(r() * 2 - 1) * (HALF_I - 30), (r() * 2 - 1) * (HALF_I - 30), 20 + r() * 35]);
+    for (var ft = 0; ft < cfg.forests; ft++) forests.push([(r() * 2 - 1) * (HALF_I - 30), (r() * 2 - 1) * (HALF_I - 30), cfg.fmin + r() * cfg.fvar]);
     var trees = 0, grid = {};
     function treeFree(x, z) {
       var gx = Math.floor(x / 4), gz = Math.floor(z / 4);
       for (var a = -1; a <= 1; a++) for (var b = -1; b <= 1; b++) if (grid[(gx + a) + ',' + (gz + b)]) return false;
       return true;
     }
-    for (var t3 = 0; t3 < 14000 && trees < 1700; t3++) {
+    for (var t3 = 0; t3 < 14000 && trees < cfg.trees; t3++) {
       var tx, tz;
       if (r() < 0.7) {
         var f = forests[(r() * forests.length) | 0], ang2 = r() * Math.PI * 2, rr = Math.sqrt(r()) * f[2];
@@ -258,9 +256,19 @@
       addBox(m, tx, tz, 0.7, 0.7, 7, { kind: 'tree', c: (r() * 3) | 0 });
       trees++;
     }
-  })();
+  }
+  var ISLAND = newMap('island', 350, 'Açıq dünya');
+  ISLAND.loot = true;
+  ISLAND.cars = [];
+  genOpen(ISLAND, 7, { vill: 16, vmargin: 70, vsp: 110, vn: 8, vr: 6, vrad: 50, lone: 60, lgap: 16, cars: 8, cdist: 40, crates: 70, rocks: 140, forests: 40, fmin: 20, fvar: 35, trees: 1700 });
 
-  var MAPS = { arena: ARENA, island: ISLAND };
+  /* --- 3. Zombi şəhəri (160x160 m): sıx evlər, dar küçələr --- */
+  var ZTOWN = newMap('town', 80, 'Zombi şəhəri');
+  ZTOWN.loot = true;
+  ZTOWN.cars = [];
+  genOpen(ZTOWN, 4242, { vill: 2, vmargin: 30, vsp: 40, vn: 9, vr: 5, vrad: 40, lone: 6, lgap: 10, cars: 6, cdist: 20, crates: 24, rocks: 24, forests: 4, fmin: 8, fvar: 10, trees: 140 });
+
+  var MAPS = { arena: ARENA, island: ISLAND, town: ZTOWN };
   var cur = ARENA;
 
   /* ---------------- Loot ---------------- */
@@ -379,7 +387,7 @@
   var api = {
     EYE: EYE, HEIGHT: HEIGHT, RADIUS: RADIUS, STEP: STEP,
     CROUCH_EYE: CROUCH_EYE, CROUCH_HEIGHT: CROUCH_HEIGHT, HELMETS: HELMETS, ARMORS: ARMORS, MAX_GRENADES: MAX_GRENADES, MAX_SMOKES: MAX_SMOKES,
-    MAX_SLOTS: MAX_SLOTS, WEAPONS: WEAPONS, WEAPON_ORDER: WEAPON_ORDER, MAPS: MAPS, LOOT_TYPES: LOOT_TYPES, rollLoot: rollLoot, rng: rng,
+    VERSION: 7, MAX_SLOTS: MAX_SLOTS, WEAPONS: WEAPONS, WEAPON_ORDER: WEAPON_ORDER, MAPS: MAPS, LOOT_TYPES: LOOT_TYPES, rollLoot: rollLoot, rng: rng,
     resolve: resolve, groundAt: groundAt, rayBox: rayBox, rayCyl: rayCyl, castWorld: castWorld, clamp: clamp,
     setMap: function (id) {
       cur = MAPS[id] || ARENA;

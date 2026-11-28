@@ -39,6 +39,7 @@ cloudflared tunnel --url http://localhost:3000
 |---|---|
 | Hamı hamıya qarşı | Hər kəs tək oynayır. 20 öldürməyə ilk çatan qalibdir. |
 | Komanda döyüşü | Qırmızı və Mavi komandalar avtomatik bərabər bölünür. Öz komandana atəş zədə vurmur. 30 xala ilk çatan qalibdir. |
+| Zombi salqını | Tək və ya dostlarla oynayırsan. Qaranlıq şəhərdə (160×160 m, 26 ev) 10 mərhələ zombidən sağ çıxmalısan. Pistoletlə başlayırsan, evlərdə silah, kask, bədənlik, dərman tap. Mərhələ bitəndə 18 saniyə fasilə olur, canın bərpa olunur, ölənlər canlanır, yerdəki əşyalar yenilənir. Zombi növləri: adi, qaçan (3-cü mərhələdən), tüpürən (4-dən), tank (6-dan). 5-ci və 10-cu mərhələdə BOSS var. 10-u keçsən qalibsən. Hamı ölsə oyun 1-ci mərhələdən yenidən başlayır. |
 | Birgə | Hamınız birlikdə botlara qarşısınız. Dalğalar getdikcə güclənir. Ölən oyunçu növbəti dalğada canlanır. Hamı eyni anda ölsə oyun bitir. |
 
 Raund bitəndən 8 saniyə sonra yeni oyun avtomatik başlayır.
@@ -75,6 +76,8 @@ Lobbidə otaq yaradanda xəritə seçilir (qoşulanlar otağın xəritəsini gö
 | Q | silahı yerə at (açıq dünya, 3 slot) |
 | F | tam ekran (ekrandakı ⛶ düyməsi də var) |
 | Esc | fasilə (buradan Ayarlara girmək olar) |
+
+> Oyun açılmayanda ekranın altında qırmızı xəta yazısı çıxır. Server və oyun faylları fərqli versiyadadırsa, oyuna girəndə "FAYL UYĞUNSUZLUĞU" xəbərdarlığı görünür: bütün 5 faylı birlikdə yeniləyin.
 
 ## 5. Silahlar (10 ədəd)
 

@@ -21,7 +21,16 @@ const FFA_KILLS = 20;
 const TDM_KILLS = 30;
 const RESPAWN_MS = 3000;
 const END_MS = 8000;
-const MODES = ['ffa', 'tdm', 'coop'];
+const MODES = ['ffa', 'tdm', 'coop', 'zombie'];
+const ZOMBIE_WAVES = 10, ZOMBIE_CAP = 22;
+// zombi növləri: hp, sürət, zədə, vuruş aralığı (san), məsafə, hədəf radiusu/hündürlüyü
+const ZTYPES = [
+  { n: 'normal', hp: 60, hpw: 7, sp: 2.5, dmg: 12, cd: 900, reach: 1.5, hr: 0.45, hh: 1.8 },
+  { n: 'runner', hp: 35, hpw: 3, sp: 5.8, dmg: 8, cd: 600, reach: 1.4, hr: 0.42, hh: 1.7 },
+  { n: 'tank', hp: 380, hpw: 28, sp: 2.0, dmg: 32, cd: 1400, reach: 1.9, hr: 0.7, hh: 2.2 },
+  { n: 'spitter', hp: 55, hpw: 4, sp: 2.6, dmg: 9, cd: 2200, reach: 1.4, hr: 0.45, hh: 1.8, range: 20 },
+  { n: 'boss', hp: 1300, hpw: 0, sp: 4.2, dmg: 34, cd: 1100, reach: 2.4, hr: 0.95, hh: 2.9 }
+];
 const LOOT_RESPAWN_MS = 45000;
 const DROP_LIFE_MS = 90000;
 const PICK_R = 1.4;
@@ -186,6 +195,9 @@ class Room {
     this.mode = mode;
     this.map = S.MAPS[mapId] || S.MAPS.arena;
     if (mode === 'coop') this.map = S.MAPS.arena; // botlar yalnız arenada
+    if (mode === 'zombie') this.map = S.MAPS.town;
+    this.zq = [];
+    this.nextZ = 0;
     this.loot = [];
     this.nextLoot = 1;
     this.nades = [];
@@ -233,11 +245,11 @@ class Room {
       let red = 0, blue = 0;
       for (const q of this.players.values()) q.team === 'red' ? red++ : blue++;
       p.team = red <= blue ? 'red' : 'blue';
-    } else if (this.mode === 'coop') p.team = 'coop';
+    } else if (this.mode === 'coop' || this.mode === 'zombie') p.team = 'coop';
     this.players.set(p.id, p);
     conn.player = p;
     conn.room = this;
-    conn.send({ t: 'welcome', id: p.id, room: this.code, mode: this.mode, team: p.team, map: this.map.id, pick: !this.map.loot, cars: this.cars.map((c) => c.id),
+    conn.send({ t: 'welcome', ver: S.VERSION, id: p.id, room: this.code, mode: this.mode, team: p.team, map: this.map.id, pick: !this.map.loot, cars: this.cars.map((c) => c.id),
       loot: this.loot.filter((l) => l.alive).map((l) => [l.id, l.ty, r1(l.x), r1(l.z)]) });
     if (this.map.loot) this.spawn(p);
     else { p.needsPick = true; p.ready = false; p.pickDeadline = Date.now() + PICK_WAIT_MS; }
@@ -254,7 +266,7 @@ class Room {
       return;
     }
     this.sendRoster();
-    if (this.mode === 'coop' && this.state === 'play') this.checkCoopDefeat();
+    if ((this.mode === 'coop' || this.mode === 'zombie') && this.state === 'play') this.checkCoopDefeat();
   }
 
   sendRoster() {
@@ -287,6 +299,7 @@ class Room {
     p.hp = 100; p.alive = true; p.respawnAt = 0; p.needsPick = false; p.pickFromDeath = false; p.car = 0;
     if (this.map.loot) {
       p.hl = 0; p.al = 0; p.helmet = 0; p.armor = 0; p.own = noWeapons(); p.gr = 0; p.sm = 0; p.sc = false; p.su = false;
+      if (this.mode === 'zombie') { p.own[0] = true; p.wi = 0; p.gr = 1; }
     } else {
       p.hl = 2; p.al = 2; p.helmet = S.HELMETS[2].hp; p.armor = S.ARMORS[2].hp; p.gr = 2; p.sm = 1; p.sc = false; p.su = false;
       p.own = noWeapons();
@@ -305,6 +318,7 @@ class Room {
     this.state = 'play';
     this.score = { red: 0, blue: 0 };
     this.bots = [];
+    this.zq = [];
     this.wave = 0;
     this.waveAt = 0;
     this.resetLoot();
@@ -617,12 +631,12 @@ class Room {
       let tMax = S.castWorld(ox, oy, oz, rx, ry, rz, w.range, this.map);
       let best = null, bestT = tMax;
       for (const e of targets) {
-        const t = S.rayCyl(ox, oy, oz, rx, ry, rz, e.x, e.z, e.y, e.y + (e.crouch ? S.CROUCH_HEIGHT : S.HEIGHT), 0.45);
+        const t = S.rayCyl(ox, oy, oz, rx, ry, rz, e.x, e.z, e.y, e.y + (e.hh || (e.crouch ? S.CROUCH_HEIGHT : S.HEIGHT)), e.hr || 0.45);
         if (t !== null && t < bestT) { bestT = t; best = e; }
       }
       if (best) {
         const hy = oy + ry * bestT;
-        const headLine = best.y + (best.crouch ? S.CROUCH_HEIGHT - 0.35 : S.HEIGHT - 0.35);
+        const headLine = best.y + (best.hh ? best.hh - 0.4 : best.crouch ? S.CROUCH_HEIGHT - 0.35 : S.HEIGHT - 0.35);
         const head = hy > headLine;
         const half = w.range * 0.5;
         const fall = bestT <= half ? 1 : Math.max(0.6, 1 - 0.4 * ((bestT - half) / half));
@@ -676,8 +690,9 @@ class Room {
     this.broadcast({ t: 'kill', k: attacker.id, v: victim.id, w: wid, head: !!head });
     if (victim.bot) {
       this.bots = this.bots.filter((b) => b !== victim);
+      if (this.mode === 'zombie') this.zombieDrop(victim);
     } else {
-      victim.respawnAt = this.mode === 'coop' ? 0 : Date.now() + RESPAWN_MS;
+      victim.respawnAt = (this.mode === 'coop' || this.mode === 'zombie') ? 0 : Date.now() + RESPAWN_MS;
       if (!this.map.loot) { victim.needsPick = true; victim.pickFromDeath = true; victim.ready = false; victim.pickDeadline = Date.now() + RESPAWN_MS + PICK_WAIT_MS; }
       this.freeCar(victim);
     }
@@ -686,13 +701,13 @@ class Room {
     if (this.mode === 'ffa' && !attacker.bot && attacker.kills >= FFA_KILLS) this.end('Qalib: ' + attacker.name);
     else if (this.mode === 'tdm' && this.score.red >= TDM_KILLS) this.end('Qalib komanda: Qırmızı');
     else if (this.mode === 'tdm' && this.score.blue >= TDM_KILLS) this.end('Qalib komanda: Mavi');
-    else if (this.mode === 'coop') this.checkCoopDefeat();
+    else if (this.mode === 'coop' || this.mode === 'zombie') this.checkCoopDefeat();
   }
 
   checkCoopDefeat() {
     if (this.state !== 'play') return;
     for (const p of this.players.values()) if (p.alive) return;
-    this.end('Məğlub oldunuz. Çatdığınız dalğa: ' + this.wave);
+    this.end(this.mode === 'zombie' ? 'Zombilər qalib gəldi. Çatdığınız mərhələ: ' + this.wave + ' / ' + ZOMBIE_WAVES : 'Məğlub oldunuz. Çatdığınız dalğa: ' + this.wave);
   }
 
   /* ---- botlar (birgə rejim) ---- */
@@ -795,6 +810,148 @@ class Room {
     }
   }
 
+  /* ---- zombilər (zombi rejimi) ---- */
+  zombieComp(n) {
+    const total = 6 + 3 * n;
+    const q = [];
+    const runners = n >= 3 ? Math.round(total * 0.25) : 0;
+    const tanks = n >= 6 ? Math.round(total * 0.12) : 0;
+    const spitters = n >= 7 ? Math.round(total * 0.15) : n >= 4 ? Math.round(total * 0.1) : 0;
+    const normals = Math.max(0, total - runners - tanks - spitters);
+    for (let i = 0; i < normals; i++) q.push(0);
+    for (let i = 0; i < runners; i++) q.push(1);
+    for (let i = 0; i < tanks; i++) q.push(2);
+    for (let i = 0; i < spitters; i++) q.push(3);
+    for (let i = q.length - 1; i > 0; i--) { const j = (Math.random() * (i + 1)) | 0; [q[i], q[j]] = [q[j], q[i]]; }
+    if (n === 10) { for (let i = 0; i < 4; i++) q.unshift(2); }
+    if (n === 5 || n === 10) q.unshift(4);
+    return q;
+  }
+
+  zombieLogic(now) {
+    if (this.mode !== 'zombie') return;
+    if (this.bots.length === 0 && this.zq.length === 0 && !this.waveAt) {
+      if (this.wave >= ZOMBIE_WAVES) { this.end('QALİB! Siz 10 mərhələni keçdiniz və şəhəri xilas etdiniz!'); return; }
+      this.waveAt = now + (this.wave === 0 ? 20000 : 18000);
+      const secs = Math.round((this.waveAt - now) / 1000);
+      this.broadcast({ t: 'msg', text: 'Mərhələ ' + (this.wave + 1) + ' / ' + ZOMBIE_WAVES + ' ' + secs + ' saniyəyə başlayır. Silah axtarın!' });
+    }
+    if (this.waveAt && now >= this.waveAt) {
+      this.waveAt = 0;
+      this.wave++;
+      for (const p of this.players.values()) {
+        if (!p.alive) this.spawn(p);
+        else { p.hp = 100; p.gr = Math.min(S.MAX_GRENADES, p.gr + 1); p.conn.send(Object.assign({ t: 'inv' }, invOf(p))); }
+      }
+      if (this.wave > 1) this.resetLoot();
+      this.zq = this.zombieComp(this.wave);
+      this.nextZ = now + 1500;
+      this.broadcast({ t: 'wave', n: this.wave, bots: this.zq.length, z: 1, max: ZOMBIE_WAVES, boss: this.zq.includes(4) });
+    }
+    if (this.zq.length && now >= this.nextZ && this.bots.length < ZOMBIE_CAP) {
+      this.spawnZombie(this.zq.shift());
+      this.nextZ = now + 400;
+    }
+  }
+
+  spawnZombie(type) {
+    const T = ZTYPES[type];
+    const sp = this.pickSpawn();
+    const humans = [...this.players.values()].filter((p) => p.alive).length;
+    const scale = 1 + 0.35 * Math.max(0, humans - 1);
+    let hp = T.hp + T.hpw * this.wave;
+    if (type === 4) hp = this.wave >= 10 ? 3200 : 1300;
+    hp = Math.round(hp * scale);
+    const z = {
+      id: this.nextBotId++, bot: true, zt: type, name: 'Zombi', team: 'bot',
+      x: sp[0] + (Math.random() - 0.5) * 4, y: 0, z: sp[1] + (Math.random() - 0.5) * 4,
+      yaw: 0, pitch: 0, hp, maxhp: hp, alive: true, wi: RIFLE, hr: T.hr, hh: T.hh,
+      sp: T.sp * (0.88 + Math.random() * 0.3) * (type === 4 && this.wave >= 10 ? 1.12 : 1) + (type === 0 ? Math.min(0.7, this.wave * 0.07) : 0),
+      kills: 0, deaths: 0, nextAtk: Date.now() + 800, strafe: Math.random() * 6
+    };
+    S.resolve(z, this.map, T.hr);
+    this.bots.push(z);
+  }
+
+  absorb(v, dmg) {
+    if (v.bot) return dmg;
+    if (v.armor > 0 && v.al > 0) { const a = Math.min(v.armor, dmg * S.ARMORS[v.al].abs); v.armor -= a; dmg -= a; }
+    return dmg;
+  }
+
+  zombieDrop(z) {
+    const r = Math.random();
+    const ty = z.zt === 4 ? 'medkit' : r < 0.1 ? 'bandage' : r < 0.14 ? 'medkit' : r < 0.2 ? 'grenade' : r < 0.23 ? 'helmet1' : r < 0.26 ? 'armor1' : null;
+    if (!ty) return;
+    const l = { id: this.nextLoot++, ty, x: z.x, z: z.z, alive: true, at: Date.now() + 60000, temp: true };
+    this.loot.push(l);
+    this.broadcast({ t: 'loot', id: l.id, a: 1, ty, x: r1(l.x), z: r1(l.z) });
+  }
+
+  updateZombies(now) {
+    if (this.mode !== 'zombie' || this.bots.length === 0) return;
+    const humans = [...this.players.values()].filter((p) => p.alive);
+    if (!humans.length) return;
+    const dt = TICK / 1000;
+    for (const b of this.bots) {
+      const T = ZTYPES[b.zt];
+      let target = null, best = 1e9;
+      for (const h of humans) {
+        const d = Math.hypot(h.x - b.x, h.z - b.z);
+        if (d < best) { best = d; target = h; }
+      }
+      const dx = target.x - b.x, dz = target.z - b.z;
+      const dist = Math.max(0.001, best);
+      b.yaw = Math.atan2(-dx, -dz);
+      const fx = dx / dist, fz = dz / dist;
+      const sx = -fz, sz = fx;
+      b.strafe += dt;
+      let mx = 0, mz = 0;
+      if (now < (b.detourUntil || 0)) {
+        mx = sx * b.detourDir + fx * 0.3; mz = sz * b.detourDir + fz * 0.3;
+      } else if (T.range) {
+        // tüpürən: 11-16 m məsafədə dayanır
+        if (dist > 16) { mx = fx; mz = fz; } else if (dist < 10) { mx = -fx * 0.7; mz = -fz * 0.7; }
+        mx += sx * Math.sin(b.strafe) * 0.4; mz += sz * Math.sin(b.strafe) * 0.4;
+      } else if (dist > T.reach * 0.8) {
+        mx = fx; mz = fz;
+        mx += sx * Math.sin(b.strafe * 1.1) * 0.12; mz += sz * Math.sin(b.strafe * 1.1) * 0.12;
+      }
+      const px = b.x, pz = b.z;
+      const sp = b.sp * (target.car ? 1 : 1);
+      b.x += mx * sp * dt; b.z += mz * sp * dt;
+      for (const o of this.bots) {
+        if (o === b) continue;
+        const ddx = b.x - o.x, ddz = b.z - o.z, dd = Math.hypot(ddx, ddz), rr = (b.hr + o.hr) * 0.8;
+        if (dd < rr && dd > 0.001) { b.x += ddx / dd * 0.06; b.z += ddz / dd * 0.06; }
+      }
+      S.resolve(b, this.map, b.hr);
+      const intended = Math.hypot(mx, mz) * sp * dt;
+      const moved = Math.hypot(b.x - px, b.z - pz);
+      if (intended > 0.01 && moved < intended * 0.4) b.stuck = (b.stuck || 0) + dt; else b.stuck = Math.max(0, (b.stuck || 0) - dt);
+      if (b.stuck > 0.5) { b.stuck = 0; b.detourUntil = now + 1400; b.detourDir = Math.random() < 0.5 ? -1 : 1; }
+
+      if (now < b.nextAtk) continue;
+      if (T.range && dist < T.range) {
+        const ox = b.x, oy = 1.5, oz = b.z, tx = target.x, ty = target.y + 1.2, tz = target.z;
+        let rdx = tx - ox, rdy = ty - oy, rdz = tz - oz;
+        const rl = Math.hypot(rdx, rdy, rdz);
+        rdx /= rl; rdy /= rl; rdz /= rl;
+        const wall = S.castWorld(ox, oy, oz, rdx, rdy, rdz, rl, this.map);
+        if (wall >= rl - 0.01) {
+          b.nextAtk = now + T.cd;
+          const hit = Math.random() < 0.7;
+          this.broadcast({ t: 'shot', id: b.id, w: 0, o: [r2(ox), r2(oy), r2(oz)], e: [[r1(hit ? tx : tx + 1.5), r1(ty), r1(hit ? tz : tz + 1.5)]], acid: 1 });
+          if (hit) this.damage(target, b, this.absorb(target, T.dmg + this.wave * 0.5), false, 'zombie');
+        } else b.nextAtk = now + 300;
+      } else if (dist < T.reach + 0.5 && Math.abs(target.y - b.y) < 1.6) {
+        b.nextAtk = now + T.cd;
+        this.damage(target, b, this.absorb(target, T.dmg + (b.zt === 4 ? this.wave : this.wave * 0.6)), false, 'zombie');
+        this.broadcast({ t: 'zhit', id: b.id });
+      }
+    }
+  }
+
   /* ---- əsas dövr ---- */
   tick() {
     const now = Date.now();
@@ -803,6 +960,8 @@ class Room {
     } else {
       this.coopLogic(now);
       this.updateBots(now);
+      this.zombieLogic(now);
+      this.updateZombies(now);
       this.updateLoot(now);
       this.updateNades(now);
       this.updateCars(now);
@@ -824,12 +983,12 @@ class Room {
       arr.push([p.id, r2(p.x), r2(p.y), r2(p.z), r2(p.yaw), r2(p.pitch), Math.round(p.hp), p.wi, (p.alive ? 1 : 0) | (p.crouch ? 4 : 0) | (p.own.some(Boolean) ? 0 : 8) | (p.car ? 16 : 0), Math.round(p.helmet), Math.round(p.armor)]);
     }
     for (const b of this.bots) {
-      arr.push([b.id, r2(b.x), r2(b.y), r2(b.z), r2(b.yaw), 0, Math.round(b.hp), RIFLE, 3]);
+      arr.push(b.zt != null ? [b.id, r2(b.x), r2(b.y), r2(b.z), r2(b.yaw), 0, Math.round(b.hp), RIFLE, 3, 0, 0, b.zt, b.maxhp] : [b.id, r2(b.x), r2(b.y), r2(b.z), r2(b.yaw), 0, Math.round(b.hp), RIFLE, 3]);
     }
     const gl = this.nades.map((n) => [n.id, n.k === 'frag' ? 0 : 1, r2(n.x), r2(n.y), r2(n.z)]);
     this.broadcast({
       t: 'snap', p: arr, g: gl, c: this.cars.map((c) => [c.id, r1(c.x), r1(c.z), r2(c.yaw), r1(c.sp), c.driver]),
-      m: { s: this.state, r: this.score.red, b: this.score.blue, wv: this.wave, bots: this.bots.length }
+      m: { s: this.state, r: this.score.red, b: this.score.blue, wv: this.wave, bots: this.bots.length + this.zq.length }
     });
   }
 }

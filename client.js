@@ -24,7 +24,7 @@
   var BASE_FOV = 75;
   var IS_TOUCH = false;
   try { IS_TOUCH = (('ontouchstart' in window) || navigator.maxTouchPoints > 0) && !!window.matchMedia && window.matchMedia('(pointer: coarse)').matches; } catch (e) {}
-  var MODE_NAMES = { ffa: 'Hamı hamıya qarşı', tdm: 'Komanda döyüşü', coop: 'Birgə: botlara qarşı' };
+  var MODE_NAMES = { ffa: 'Hamı hamıya qarşı', tdm: 'Komanda döyüşü', coop: 'Birgə: botlara qarşı', zombie: 'Zombi salqını' };
   var TEAM_NAMES = { red: 'Qırmızı', blue: 'Mavi' };
 
   if (typeof THREE === 'undefined') {
@@ -54,13 +54,17 @@
   // silah üçün ayrıca səhnə və kamera: divara girmir, öz işığı var
   var vmScene = new THREE.Scene();
   var vmCamera = new THREE.PerspectiveCamera(60, 1, 0.01, 10);
-  vmScene.add(new THREE.HemisphereLight(0xffffff, 0x8a8a8a, 0.95));
-  var vmSun = new THREE.DirectionalLight(0xfff0d0, 0.8);
-  vmSun.position.set(1, 1.2, 1);
+  vmScene.add(new THREE.HemisphereLight(0xffffff, 0x6a6a6a, 0.75));
+  var vmSun = new THREE.DirectionalLight(0xfff0d0, 1.0);
+  vmSun.position.set(1, 1.4, 0.6);
   vmScene.add(vmSun);
+  var vmFill = new THREE.DirectionalLight(0x9db8ff, 0.35);
+  vmFill.position.set(-1, 0.2, 0.8);
+  vmScene.add(vmFill);
 
   /* ---- işıq ---- */
-  scene.add(new THREE.HemisphereLight(0xdbeaff, 0x8c7a62, 0.8));
+  var hemi = new THREE.HemisphereLight(0xdbeaff, 0x8c7a62, 0.8);
+  scene.add(hemi);
   var SUN_POS = new THREE.Vector3(-25, 40, 15);
   var sun = new THREE.DirectionalLight(0xfff0d6, 0.95);
   sun.position.copy(SUN_POS);
@@ -318,7 +322,18 @@
 
   /* ======================= Dünya (xəritəyə görə qurulur) ======================= */
   var world = null, curMapId = '';
-  var FOG = { arena: [55, 200], island: [70, 300] };
+  var FOG = { arena: [55, 200], island: [70, 300], town: [14, 85] };
+  var SUN_COL = 0xfff0d6;
+  function setAtmos(id) {
+    var town = id === 'town';
+    var col = town ? 0x1c2226 : HORIZON;
+    scene.background.setHex(col);
+    scene.fog.color.setHex(col);
+    skyGroup.visible = !town;
+    hemi.color.setHex(town ? 0x6f86a0 : 0xdbeaff); hemi.groundColor.setHex(town ? 0x2a2824 : 0x8c7a62);
+    hemi.intensity = town ? 0.55 : 0.8;
+    sun.color.setHex(town ? 0x9fb4d8 : SUN_COL); sun.intensity = town ? 0.5 : 0.95;
+  }
   var railMat = new THREE.MeshLambertMaterial({ color: 0x2c3138 });
   var marksTex = null;
 
@@ -521,9 +536,18 @@
         g.fillStyle = 'rgba(' + (r() < 0.5 ? '120,150,70' : '55,85,35') + ',' + (0.12 + r() * 0.16) + ')';
         g.beginPath(); g.ellipse(r() * s, r() * s, 10 + r() * 30, 6 + r() * 18, r() * 3, 0, 6.3); g.fill();
       }
-      for (var j = 0; j < 900; j++) {
-        g.strokeStyle = 'rgba(' + (r() < 0.5 ? '170,200,100' : '40,70,30') + ',' + (0.2 + r() * 0.3) + ')'; g.lineWidth = 1;
-        var x = r() * s, y = r() * s; g.beginPath(); g.moveTo(x, y); g.lineTo(x + (r() - 0.5) * 4, y - 3 - r() * 5); g.stroke();
+      for (var d = 0; d < 7; d++) {
+        g.fillStyle = 'rgba(' + (r() < 0.5 ? '120,100,62' : '150,135,80') + ',' + (0.1 + r() * 0.14) + ')';
+        g.beginPath(); g.ellipse(r() * s, r() * s, 6 + r() * 16, 4 + r() * 9, r() * 3, 0, 6.3); g.fill();
+      }
+      var gcol = ['170,200,100', '40,70,30', '95,135,55', '120,150,60', '70,100,40', '190,190,110'];
+      for (var j = 0; j < 2600; j++) {
+        g.strokeStyle = 'rgba(' + gcol[(r() * 6) | 0] + ',' + (0.25 + r() * 0.4) + ')'; g.lineWidth = 0.7 + r() * 0.8;
+        var x = r() * s, y = r() * s, bl = 3 + r() * 6; g.beginPath(); g.moveTo(x, y); g.quadraticCurveTo(x + (r() - 0.5) * 3, y - bl * 0.5, x + (r() - 0.5) * 7, y - bl); g.stroke();
+      }
+      for (var f = 0; f < 14; f++) {
+        g.fillStyle = r() < 0.5 ? 'rgba(240,235,200,.85)' : 'rgba(235,200,70,.8)';
+        g.fillRect(r() * s, r() * s, 1.5, 1.5);
       }
     });
     T.leaf = [0x2f5d2a, 0x3b6b2c, 0x264f26].map(function (c) { return new THREE.MeshLambertMaterial({ color: c }); });
@@ -583,10 +607,11 @@
     scene.add(world);
     scene.fog.near = FOG[id] ? FOG[id][0] : 55;
     scene.fog.far = FOG[id] ? FOG[id][1] : 200;
-    camera.far = id === 'island' ? 520 : 300;
+    camera.far = id === 'island' ? 520 : id === 'town' ? 200 : 300;
+    setAtmos(id);
     camera.updateProjectionMatrix();
     document.body.classList.toggle('lootmap', !!map.loot);
-    if (id === 'island') buildIsland(map); else buildArena(map);
+    if (id === 'island' || id === 'town') buildIsland(map); else buildArena(map);
   }
   buildWorld('arena');
 
@@ -681,15 +706,48 @@
   function clickSound() { tone(900, 0.04, 0.12, 'square'); }
 
   /* ======================= Silah modelləri (birinci şəxs) ======================= */
+  function ph(color, spec, shin, extra) {
+    var o = { color: color, specular: spec, shininess: shin };
+    if (extra) for (var k in extra) o[k] = extra[k];
+    return new THREE.MeshPhongMaterial(o);
+  }
+  var tGrain = canvasTex(128, function (g, s) {
+    var r = rng(91);
+    g.fillStyle = '#7b4e2a'; g.fillRect(0, 0, s, s);
+    for (var i = 0; i < 70; i++) {
+      g.strokeStyle = 'rgba(' + (r() < 0.5 ? '40,22,8' : '150,100,55') + ',' + (0.12 + r() * 0.25) + ')'; g.lineWidth = 0.6 + r() * 1.6;
+      var y = r() * s; g.beginPath(); g.moveTo(0, y);
+      g.bezierCurveTo(s * 0.3, y + (r() - 0.5) * 8, s * 0.6, y + (r() - 0.5) * 8, s, y + (r() - 0.5) * 6); g.stroke();
+    }
+  });
+  var tCamo = canvasTex(128, function (g, s) {
+    var r = rng(92);
+    g.fillStyle = '#3d4630'; g.fillRect(0, 0, s, s);
+    var cols = ['#2b3322', '#566040', '#1f261a', '#6b6a45'];
+    for (var i = 0; i < 46; i++) {
+      g.fillStyle = cols[i % 4]; g.beginPath();
+      g.ellipse(r() * s, r() * s, 6 + r() * 16, 4 + r() * 10, r() * 3, 0, Math.PI * 2); g.fill();
+    }
+    dots(g, s, 500, 0.12, r, false);
+  });
+  var tRail = canvasTex(32, function (g, s) {
+    g.fillStyle = '#1d1f23'; g.fillRect(0, 0, s, s);
+    g.fillStyle = '#3a3e45'; g.fillRect(0, 0, s, s * 0.45);
+    g.fillStyle = '#0c0d0f'; g.fillRect(0, s * 0.45, s, 2);
+  });
   var VM = {
-    metal: new THREE.MeshLambertMaterial({ color: 0x30343a }),
-    dark: new THREE.MeshLambertMaterial({ color: 0x1c1e22 }),
-    poly: new THREE.MeshLambertMaterial({ color: 0x26282c }),
-    steel: new THREE.MeshLambertMaterial({ color: 0x70767e }),
-    wood: new THREE.MeshLambertMaterial({ color: 0x7a5230 }),
-    skin: new THREE.MeshLambertMaterial({ color: 0xd9a97f }),
-    sleeve: new THREE.MeshLambertMaterial({ color: 0x3f4636 }),
-    glass: new THREE.MeshBasicMaterial({ color: 0x5ab0ff }),
+    metal: ph(0x2d3137, 0x707880, 70),
+    dark: ph(0x16181b, 0x3a3d42, 35),
+    poly: ph(0x23252a, 0x2c2e33, 14),
+    steel: ph(0x9aa0a8, 0xe0e4ea, 120),
+    olive: ph(0x4d5b3b, 0x303828, 16),
+    wood: ph(0xffffff, 0x4a3320, 22, { map: tGrain }),
+    rail: ph(0xffffff, 0x555a62, 40, { map: tRail }),
+    glove: ph(0x1c1e20, 0x2a2c2e, 12),
+    skin: ph(0xd9a97f, 0x241810, 8),
+    sleeve: ph(0xffffff, 0x0a0a0a, 4, { map: tCamo }),
+    glass: new THREE.MeshPhongMaterial({ color: 0x3a7fc4, specular: 0xffffff, shininess: 160, transparent: true, opacity: 0.8 }),
+    dot: new THREE.MeshBasicMaterial({ color: 0xff2020 }),
     flash: new THREE.MeshBasicMaterial({ color: 0xffd24a, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide })
   };
   var geoCache = {};
@@ -710,73 +768,268 @@
     grp.add(m);
     return m;
   }
-  // əl və qol: qol kameradan kənara doğru uzanır
+  // əl və qol: əlcək, barmaqlar, qolluq; qol kameradan kənara doğru uzanır
   function hand(grp, x, y, z, sx, big) {
-    part(grp, big ? 0.085 : 0.075, 0.085, 0.11, x, y, z, VM.skin);
+    part(grp, 0.082, 0.05, 0.095, x, y + 0.005, z, VM.glove);
+    part(grp, 0.084, 0.034, 0.06, x, y - 0.012, z - 0.07, VM.glove);
+    part(grp, 0.078, 0.02, 0.04, x, y - 0.02, z - 0.1, VM.glove);
+    part(grp, 0.026, 0.034, 0.07, x + sx * 0.05, y + 0.005, z - 0.02, VM.glove);
+    part(grp, 0.07, 0.012, 0.03, x, y + 0.03, z + 0.01, VM.dark);
     var dx = sx * 0.3, dy = -0.5, dz = 1, l = Math.sqrt(dx * dx + dy * dy + dz * dz);
-    var s = part(grp, 0.095, 0.095, 0.55, x + dx / l * 0.3, y + dy / l * 0.3, z + dz / l * 0.3 + 0.04, VM.sleeve);
+    var s = part(grp, 0.098, 0.098, 0.56, x + dx / l * 0.31, y + dy / l * 0.31, z + dz / l * 0.31 + 0.05, VM.sleeve);
     s.rotation.order = 'YXZ';
     s.rotation.y = Math.atan2(dx, dz);
     s.rotation.x = -Math.asin(dy / l);
+    var c = part(grp, 0.104, 0.104, 0.05, x + dx / l * 0.045, y + dy / l * 0.045, z + dz / l * 0.045 + 0.06, VM.dark);
+    c.rotation.order = 'YXZ'; c.rotation.y = s.rotation.y; c.rotation.x = s.rotation.x;
   }
-  var VMOD = {
-    pistol: { m: 'pistol', s: [1, 1, 1] }, deagle: { m: 'pistol', s: [1.2, 1.25, 1.2] },
-    uzi: { m: 'rifle', s: [0.9, 0.9, 0.62] }, rifle: { m: 'rifle', s: [1, 1, 1] }, akm: { m: 'rifle', s: [1.05, 1.05, 1.08] },
-    dmr: { m: 'rifle', s: [1, 1, 1.25] }, lmg: { m: 'rifle', s: [1.25, 1.3, 1.1] }, shotgun: { m: 'shotgun', s: [1, 1, 1] },
-    sniper: { m: 'sniper', s: [1, 1, 1] }, awm: { m: 'sniper', s: [1.15, 1.15, 1.2] }
-  };
+  // qabırğalı (rail / soyutma) hissə: tekstura uzanmır
+  var ribGeo = {};
+  function ribbed(grp, w, h, d, x, y, z, mat) {
+    var k = w + ',' + h + ',' + d, g = ribGeo[k];
+    if (!g) {
+      g = ribGeo[k] = new THREE.BoxGeometry(w, h, d);
+      var uv = g.attributes.uv, dims = [[d, h], [d, h], [w, d], [w, d], [w, h], [w, h]];
+      for (var f = 0; f < 6; f++) for (var v = 0; v < 4; v++) { var i = f * 4 + v; uv.setXY(i, uv.getX(i) * dims[f][0] / 0.03, uv.getY(i) * dims[f][1] / 0.03); }
+      uv.needsUpdate = true;
+    }
+    var m = new THREE.Mesh(g, mat || VM.rail);
+    m.position.set(x, y, z);
+    grp.add(m);
+    return m;
+  }
+  function cylR(grp, rt, rb, len, x, y, z, mat, seg) {
+    var m = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, len, seg || 14), mat);
+    m.rotation.x = Math.PI / 2;
+    m.position.set(x, y, z);
+    grp.add(m);
+    return m;
+  }
+  function cylV(grp, r, len, x, y, z, mat) {
+    var m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, len, 12), mat);
+    m.position.set(x, y, z);
+    grp.add(m);
+    return m;
+  }
+  function redDot(g, x, y, z) {
+    part(g, 0.04, 0.012, 0.07, x, y, z, VM.dark);
+    part(g, 0.036, 0.04, 0.012, x, y + 0.03, z + 0.03, VM.dark);
+    part(g, 0.036, 0.04, 0.012, x, y + 0.03, z - 0.03, VM.dark);
+    part(g, 0.006, 0.03, 0.04, x - 0.017, y + 0.03, z, VM.dark);
+    part(g, 0.006, 0.03, 0.04, x + 0.017, y + 0.03, z, VM.dark);
+    part(g, 0.028, 0.03, 0.004, x, y + 0.03, z - 0.032, VM.glass);
+    part(g, 0.004, 0.004, 0.004, x, y + 0.032, z - 0.036, VM.dot);
+  }
+  function scope(g, x, y, z, len, r) {
+    cylR(g, r, r, len, x, y, z, VM.dark, 16);
+    cylR(g, r * 1.5, r, len * 0.22, x, y, z - len * 0.5, VM.dark, 16);
+    cylR(g, r * 1.35, r * 1.5, len * 0.01, x, y, z - len * 0.6, VM.glass, 16);
+    cylR(g, r * 1.4, r * 1.2, len * 0.16, x, y, z + len * 0.5, VM.dark, 16);
+    part(g, 0.02, 0.03, 0.03, x, y - r - 0.012, z - len * 0.25, VM.metal);
+    part(g, 0.02, 0.03, 0.03, x, y - r - 0.012, z + len * 0.2, VM.metal);
+    cylV(g, 0.012, 0.025, x, y + r + 0.008, z - len * 0.05, VM.metal);
+  }
+  function pgrip(g, x, y, z, mat) {
+    part(g, 0.042, 0.115, 0.06, x, y, z, mat || VM.poly, 0.3);
+    part(g, 0.044, 0.02, 0.07, x, y - 0.065, z + 0.03, VM.dark, 0.3);
+  }
+  function trigger(g, y, z) {
+    part(g, 0.012, 0.012, 0.075, 0, y, z, VM.dark);
+    part(g, 0.012, 0.045, 0.01, 0, y + 0.02, z - 0.035, VM.dark);
+    part(g, 0.012, 0.045, 0.01, 0, y + 0.02, z + 0.035, VM.dark);
+    part(g, 0.008, 0.03, 0.008, 0, y + 0.025, z, VM.steel, 0.3);
+  }
+  var VMZ = {};
   function buildVM(id) {
-    var g = new THREE.Group(), mz;
-    var spec = VMOD[id] || VMOD.rifle, model = spec.m;
-    if (model === 'pistol') {
-      part(g, 0.058, 0.065, 0.3, 0, 0.03, -0.1, VM.metal);
-      part(g, 0.05, 0.04, 0.26, 0, -0.015, -0.08, VM.dark);
-      cyl(g, 0.014, 0.05, 0, 0.03, -0.26, VM.steel);
-      part(g, 0.05, 0.13, 0.07, 0, -0.095, 0.03, VM.poly, 0.2);
-      part(g, 0.012, 0.04, 0.07, 0, -0.045, -0.03, VM.dark);
-      part(g, 0.012, 0.018, 0.02, 0, 0.07, -0.23, VM.dark);
-      part(g, 0.03, 0.018, 0.02, 0, 0.07, 0.04, VM.dark);
-      hand(g, 0.0, -0.09, 0.04, 1);
-      hand(g, -0.05, -0.085, 0.045, -1);
-      mz = -0.3;
-    } else if (model === 'rifle') {
-      part(g, 0.07, 0.095, 0.34, 0, 0, -0.02, VM.metal);
-      part(g, 0.075, 0.08, 0.3, 0, -0.005, -0.33, VM.poly);
-      part(g, 0.03, 0.015, 0.34, 0, 0.052, -0.2, VM.dark);
-      cyl(g, 0.013, 0.3, 0, 0.012, -0.6, VM.steel);
-      cyl(g, 0.02, 0.07, 0, 0.012, -0.73, VM.dark);
-      part(g, 0.01, 0.04, 0.012, 0, 0.05, -0.62, VM.dark);
-      part(g, 0.02, 0.03, 0.02, 0, 0.065, 0.07, VM.dark);
-      part(g, 0.045, 0.15, 0.08, 0, -0.12, -0.04, VM.dark, -0.15);
-      part(g, 0.05, 0.11, 0.06, 0, -0.1, 0.1, VM.poly, 0.3);
-      part(g, 0.06, 0.11, 0.26, 0, -0.02, 0.3, VM.poly);
-      hand(g, 0.0, -0.11, 0.1, 1);
-      hand(g, 0.0, -0.07, -0.34, -1, true);
+    var g = new THREE.Group(), mz = -0.78;
+    if (id === 'pistol') {
+      part(g, 0.034, 0.045, 0.24, 0, 0.034, -0.1, VM.metal);
+      for (var i = 0; i < 5; i++) part(g, 0.036, 0.04, 0.006, 0, 0.034, 0.0 + i * 0.012, VM.dark);
+      part(g, 0.032, 0.032, 0.2, 0, -0.005, -0.09, VM.poly);
+      cyl(g, 0.011, 0.04, 0, 0.034, -0.235, VM.steel);
+      part(g, 0.01, 0.014, 0.012, 0, 0.062, -0.21, VM.dark);
+      part(g, 0.024, 0.012, 0.014, 0, 0.062, 0.015, VM.dark);
+      pgrip(g, 0, -0.085, 0.03);
+      trigger(g, -0.04, -0.03);
+      part(g, 0.032, 0.012, 0.016, 0, 0.0, -0.205, VM.dark);
+      hand(g, 0.0, -0.085, 0.045, 1);
+      hand(g, -0.048, -0.08, 0.035, -1);
+      mz = -0.27;
+    } else if (id === 'deagle') {
+      part(g, 0.044, 0.05, 0.3, 0, 0.034, -0.1, VM.steel);
+      ribbed(g, 0.02, 0.012, 0.28, 0, 0.066, -0.1, VM.rail);
+      part(g, 0.046, 0.04, 0.26, 0, -0.008, -0.1, VM.metal);
+      cyl(g, 0.015, 0.05, 0, 0.034, -0.27, VM.dark);
+      part(g, 0.011, 0.016, 0.012, 0, 0.078, -0.24, VM.dark);
+      part(g, 0.026, 0.014, 0.016, 0, 0.078, 0.04, VM.dark);
+      pgrip(g, 0, -0.09, 0.05, VM.wood);
+      trigger(g, -0.045, -0.04);
+      hand(g, 0.0, -0.09, 0.06, 1);
+      hand(g, -0.055, -0.085, 0.05, -1);
+      mz = -0.31;
+    } else if (id === 'uzi') {
+      part(g, 0.06, 0.078, 0.3, 0, 0, -0.04, VM.metal);
+      ribbed(g, 0.062, 0.012, 0.3, 0, 0.044, -0.04, VM.rail);
+      part(g, 0.058, 0.07, 0.07, 0, 0.0, -0.22, VM.dark);
+      cyl(g, 0.011, 0.14, 0, 0.012, -0.3, VM.steel);
+      part(g, 0.04, 0.2, 0.05, 0, -0.13, 0.0, VM.dark);
+      part(g, 0.045, 0.02, 0.055, 0, -0.235, 0.0, VM.poly);
+      part(g, 0.05, 0.05, 0.085, 0, -0.035, 0.0, VM.poly);
+      part(g, 0.01, 0.01, 0.2, 0.02, 0.0, 0.25, VM.steel);
+      part(g, 0.01, 0.01, 0.2, -0.02, 0.0, 0.25, VM.steel);
+      part(g, 0.05, 0.05, 0.012, 0, 0.0, 0.35, VM.dark);
+      part(g, 0.012, 0.03, 0.012, 0, 0.058, -0.25, VM.dark);
+      part(g, 0.024, 0.016, 0.02, 0, 0.056, 0.07, VM.dark);
+      trigger(g, -0.055, 0.075);
+      hand(g, 0.0, -0.085, 0.04, 1);
+      hand(g, 0.0, -0.065, -0.2, -1, true);
+      mz = -0.4;
+    } else if (id === 'rifle') {
+      // M416
+      part(g, 0.066, 0.092, 0.34, 0, 0, -0.02, VM.metal);
+      ribbed(g, 0.032, 0.016, 0.52, 0, 0.054, -0.1, VM.rail);
+      part(g, 0.074, 0.075, 0.3, 0, -0.004, -0.34, VM.poly);
+      ribbed(g, 0.076, 0.014, 0.28, 0, 0.037, -0.34, VM.rail);
+      ribbed(g, 0.014, 0.07, 0.26, 0.04, -0.004, -0.34, VM.rail);
+      ribbed(g, 0.014, 0.07, 0.26, -0.04, -0.004, -0.34, VM.rail);
+      cyl(g, 0.012, 0.16, 0, 0.012, -0.58, VM.steel);
+      cylR(g, 0.021, 0.021, 0.075, 0, 0.012, -0.69, VM.dark, 12);
+      cylR(g, 0.023, 0.023, 0.01, 0, 0.012, -0.73, VM.dark, 12);
+      redDot(g, 0, 0.068, -0.02);
+      part(g, 0.016, 0.034, 0.016, 0, 0.064, -0.6, VM.dark);
+      part(g, 0.04, 0.15, 0.075, 0, -0.12, -0.04, VM.dark, -0.12);
+      part(g, 0.042, 0.02, 0.08, 0, -0.2, -0.065, VM.poly, -0.12);
+      cylV(g, 0.017, 0.1, 0, -0.07, -0.42, VM.poly);
+      pgrip(g, 0, -0.1, 0.1);
+      cylR(g, 0.02, 0.02, 0.1, 0, 0.01, 0.2, VM.dark, 10);
+      part(g, 0.056, 0.12, 0.2, 0, -0.025, 0.34, VM.poly);
+      part(g, 0.058, 0.13, 0.02, 0, -0.025, 0.45, VM.dark);
+      part(g, 0.016, 0.014, 0.05, 0.036, 0.03, 0.0, VM.steel);
+      trigger(g, -0.062, 0.03);
+      hand(g, 0.0, -0.105, 0.1, 1);
+      hand(g, 0.0, -0.075, -0.4, -1, true);
       mz = -0.78;
-    } else if (model === 'shotgun') {
-      cyl(g, 0.02, 0.72, 0, 0.025, -0.3, VM.dark);
-      cyl(g, 0.017, 0.5, 0, -0.012, -0.25, VM.steel);
-      part(g, 0.075, 0.065, 0.2, 0, -0.025, -0.27, VM.wood);
-      part(g, 0.07, 0.1, 0.3, 0, -0.005, 0.08, VM.metal);
-      part(g, 0.01, 0.025, 0.02, 0, 0.06, -0.6, VM.dark);
-      part(g, 0.06, 0.1, 0.27, 0, -0.04, 0.36, VM.wood);
-      part(g, 0.045, 0.1, 0.06, 0, -0.1, 0.12, VM.poly, 0.3);
-      hand(g, 0.0, -0.1, 0.12, 1);
-      hand(g, 0.0, -0.06, -0.27, -1, true);
-      mz = -0.68;
-    } else {
-      part(g, 0.06, 0.08, 0.6, 0, 0, -0.1, VM.metal);
-      cyl(g, 0.014, 0.5, 0, 0.012, -0.65, VM.steel);
-      cyl(g, 0.026, 0.3, 0, 0.09, -0.1, VM.dark);
-      cyl(g, 0.03, 0.03, 0, 0.09, -0.26, VM.dark);
-      cyl(g, 0.022, 0.012, 0, 0.09, -0.275, VM.glass);
-      part(g, 0.02, 0.04, 0.03, 0, 0.055, -0.1, VM.dark);
-      part(g, 0.06, 0.11, 0.3, 0, -0.03, 0.36, VM.poly);
-      part(g, 0.04, 0.12, 0.07, 0, -0.1, 0.12, VM.dark, 0.25);
-      part(g, 0.045, 0.1, 0.07, 0, -0.08, -0.05, VM.dark, -0.1);
-      hand(g, 0.0, -0.11, 0.12, 1);
-      hand(g, 0.0, -0.06, -0.22, -1, true);
+    } else if (id === 'akm') {
+      part(g, 0.062, 0.082, 0.38, 0, 0, -0.05, VM.metal);
+      part(g, 0.05, 0.03, 0.34, 0, 0.05, -0.04, VM.dark);
+      part(g, 0.068, 0.036, 0.3, 0, -0.025, -0.4, VM.wood);
+      part(g, 0.068, 0.04, 0.3, 0, 0.026, -0.4, VM.wood);
+      cylR(g, 0.015, 0.015, 0.3, 0, 0.056, -0.4, VM.metal, 10);
+      cyl(g, 0.012, 0.18, 0, 0.0, -0.66, VM.steel);
+      part(g, 0.02, 0.05, 0.02, 0, 0.034, -0.68, VM.dark);
+      part(g, 0.012, 0.03, 0.012, 0, 0.074, -0.68, VM.dark);
+      cylR(g, 0.02, 0.016, 0.06, 0, 0.0, -0.77, VM.dark, 10);
+      part(g, 0.02, 0.012, 0.06, 0, 0.056, 0.14, VM.dark);
+      part(g, 0.042, 0.07, 0.075, 0, -0.1, -0.06, VM.dark, -0.25);
+      part(g, 0.042, 0.07, 0.075, 0, -0.165, -0.015, VM.dark, -0.55);
+      part(g, 0.042, 0.06, 0.075, 0, -0.215, 0.05, VM.dark, -0.85);
+      pgrip(g, 0, -0.095, 0.11, VM.wood);
+      part(g, 0.056, 0.115, 0.3, 0, -0.03, 0.36, VM.wood, 0.05);
+      part(g, 0.058, 0.13, 0.02, 0, -0.03, 0.51, VM.dark);
+      trigger(g, -0.055, 0.04);
+      hand(g, 0.0, -0.105, 0.11, 1);
+      hand(g, 0.0, -0.065, -0.4, -1, true);
+      mz = -0.82;
+    } else if (id === 'dmr') {
+      // SKS
+      part(g, 0.06, 0.07, 0.3, 0, 0.0, -0.05, VM.metal);
+      part(g, 0.062, 0.11, 0.86, 0, -0.035, -0.1, VM.wood);
+      part(g, 0.062, 0.05, 0.5, 0, 0.045, -0.5, VM.wood);
+      cyl(g, 0.012, 0.5, 0, 0.026, -0.75, VM.steel);
+      cylR(g, 0.012, 0.012, 0.3, 0, 0.052, -0.55, VM.metal, 8);
+      cylR(g, 0.018, 0.018, 0.06, 0, 0.026, -0.99, VM.dark, 10);
+      part(g, 0.016, 0.04, 0.016, 0, 0.058, -0.98, VM.dark);
+      part(g, 0.044, 0.1, 0.09, 0, -0.1, -0.02, VM.dark);
+      part(g, 0.056, 0.12, 0.26, 0, -0.04, 0.46, VM.wood, 0.1);
+      part(g, 0.058, 0.13, 0.02, 0, -0.045, 0.6, VM.dark);
+      scope(g, 0, 0.1, -0.06, 0.22, 0.018);
+      trigger(g, -0.05, 0.08);
+      hand(g, 0.0, -0.085, 0.14, 1);
+      hand(g, 0.0, -0.045, -0.42, -1, true);
+      mz = -1.03;
+    } else if (id === 'lmg') {
+      // M249
+      part(g, 0.075, 0.1, 0.48, 0, 0, -0.02, VM.metal);
+      part(g, 0.04, 0.03, 0.2, 0, 0.065, -0.1, VM.dark);
+      part(g, 0.078, 0.06, 0.18, 0, -0.07, -0.02, VM.olive);
+      part(g, 0.12, 0.13, 0.15, 0, -0.14, -0.02, VM.olive);
+      part(g, 0.122, 0.02, 0.152, 0, -0.205, -0.02, VM.dark);
+      part(g, 0.02, 0.03, 0.1, 0.045, -0.09, -0.08, VM.steel);
+      cylR(g, 0.03, 0.03, 0.4, 0, 0.012, -0.5, VM.dark, 14);
+      for (var j = 0; j < 7; j++) cylR(g, 0.033, 0.033, 0.012, 0, 0.012, -0.34 - j * 0.055, VM.metal, 14);
+      cylR(g, 0.014, 0.014, 0.14, 0, 0.012, -0.78, VM.steel, 10);
+      cylR(g, 0.024, 0.02, 0.07, 0, 0.012, -0.88, VM.dark, 12);
+      part(g, 0.014, 0.1, 0.012, 0.03, -0.085, -0.62, VM.dark, 0.5);
+      part(g, 0.014, 0.1, 0.012, -0.03, -0.085, -0.62, VM.dark, 0.5);
+      part(g, 0.02, 0.06, 0.02, 0, 0.1, -0.1, VM.dark);
+      part(g, 0.14, 0.02, 0.03, 0, 0.126, -0.1, VM.dark);
+      part(g, 0.016, 0.04, 0.016, 0, 0.06, -0.86, VM.dark);
+      pgrip(g, 0, -0.105, 0.12);
+      part(g, 0.06, 0.14, 0.34, 0, -0.03, 0.36, VM.poly);
+      part(g, 0.062, 0.15, 0.02, 0, -0.03, 0.54, VM.dark);
+      trigger(g, -0.065, 0.06);
+      hand(g, 0.0, -0.115, 0.12, 1);
+      hand(g, 0.0, -0.065, -0.36, -1, true);
       mz = -0.92;
+    } else if (id === 'shotgun') {
+      // S12K
+      part(g, 0.08, 0.09, 0.4, 0, 0.0, -0.04, VM.metal);
+      ribbed(g, 0.034, 0.014, 0.42, 0, 0.052, -0.05, VM.rail);
+      part(g, 0.1, 0.1, 0.25, 0, -0.09, -0.04, VM.dark);
+      ribbed(g, 0.102, 0.03, 0.24, 0, -0.125, -0.04, VM.rail);
+      part(g, 0.076, 0.07, 0.3, 0, 0.0, -0.4, VM.poly);
+      cylR(g, 0.024, 0.024, 0.34, 0, 0.018, -0.56, VM.steel, 14);
+      cylR(g, 0.03, 0.03, 0.08, 0, 0.018, -0.76, VM.dark, 14);
+      for (var k = 0; k < 3; k++) cylR(g, 0.032, 0.032, 0.008, 0, 0.018, -0.73 - k * 0.025, VM.metal, 14);
+      part(g, 0.016, 0.034, 0.016, 0, 0.056, -0.76, VM.dark);
+      pgrip(g, 0, -0.1, 0.16);
+      part(g, 0.058, 0.115, 0.28, 0, -0.025, 0.4, VM.poly);
+      part(g, 0.06, 0.125, 0.02, 0, -0.025, 0.55, VM.dark);
+      trigger(g, -0.06, 0.08);
+      hand(g, 0.0, -0.115, 0.16, 1);
+      hand(g, 0.0, -0.075, -0.38, -1, true);
+      mz = -0.82;
+    } else if (id === 'sniper') {
+      // Kar98k
+      part(g, 0.06, 0.07, 0.3, 0, 0.0, -0.02, VM.metal);
+      part(g, 0.058, 0.07, 0.95, 0, -0.035, -0.18, VM.wood);
+      part(g, 0.06, 0.048, 0.6, 0, 0.0, -0.58, VM.wood);
+      cyl(g, 0.014, 0.8, 0, 0.026, -0.7, VM.steel);
+      cylR(g, 0.017, 0.017, 0.03, 0, 0.026, -1.12, VM.dark, 10);
+      part(g, 0.016, 0.04, 0.016, 0, 0.056, -1.1, VM.dark);
+      part(g, 0.03, 0.03, 0.04, 0, 0.058, 0.08, VM.dark);
+      part(g, 0.065, 0.014, 0.1, 0, -0.07, -0.06, VM.steel);
+      part(g, 0.06, 0.02, 0.1, 0, -0.085, -0.1, VM.dark);
+      part(g, 0.065, 0.12, 0.34, 0, -0.07, 0.5, VM.wood, 0.14);
+      part(g, 0.067, 0.14, 0.02, 0, -0.08, 0.68, VM.dark);
+      cyl(g, 0.007, 0.07, 0.065, 0.035, 0.07, VM.steel).rotation.set(0, 0, Math.PI / 2);
+      var kb = new THREE.Mesh(new THREE.SphereGeometry(0.014, 8, 6), VM.steel); kb.position.set(0.1, 0.035, 0.07); g.add(kb);
+      trigger(g, -0.06, 0.1);
+      hand(g, 0.0, -0.085, 0.14, 1);
+      hand(g, 0.0, -0.045, -0.5, -1, true);
+      mz = -1.16;
+    } else {
+      // AWM
+      part(g, 0.066, 0.1, 0.5, 0, 0.0, -0.05, VM.olive);
+      part(g, 0.07, 0.07, 0.58, 0, -0.03, -0.55, VM.olive);
+      part(g, 0.06, 0.12, 0.42, 0, -0.04, 0.4, VM.olive, 0.05);
+      part(g, 0.062, 0.03, 0.2, 0, 0.065, 0.5, VM.dark);
+      part(g, 0.064, 0.14, 0.02, 0, -0.04, 0.62, VM.dark);
+      cylR(g, 0.022, 0.022, 0.62, 0, 0.02, -0.82, VM.dark, 14);
+      cylR(g, 0.034, 0.034, 0.14, 0, 0.02, -1.14, VM.metal, 14);
+      for (var q = 0; q < 3; q++) part(g, 0.05, 0.05, 0.006, 0, 0.02, -1.1 - q * 0.04, VM.dark);
+      part(g, 0.044, 0.15, 0.08, 0, -0.14, -0.02, VM.dark, -0.1);
+      pgrip(g, 0, -0.105, 0.18, VM.olive);
+      scope(g, 0, 0.108, -0.1, 0.4, 0.026);
+      part(g, 0.014, 0.03, 0.2, 0, 0.06, -0.1, VM.dark);
+      cyl(g, 0.008, 0.08, 0.075, 0.04, 0.08, VM.steel).rotation.set(0, 0, Math.PI / 2);
+      var kb2 = new THREE.Mesh(new THREE.SphereGeometry(0.017, 8, 6), VM.dark); kb2.position.set(0.12, 0.04, 0.08); g.add(kb2);
+      part(g, 0.012, 0.16, 0.012, 0.035, -0.12, -0.62, VM.dark, 0.5);
+      part(g, 0.012, 0.16, 0.012, -0.035, -0.12, -0.62, VM.dark, 0.5);
+      trigger(g, -0.065, 0.12);
+      hand(g, 0.0, -0.11, 0.18, 1);
+      hand(g, 0.0, -0.06, -0.42, -1, true);
+      mz = -1.22;
     }
     var flash = new THREE.Group();
     var f1 = new THREE.Mesh(new THREE.PlaneGeometry(0.2, 0.2), VM.flash);
@@ -791,7 +1044,9 @@
     var muzzle = new THREE.Object3D();
     muzzle.position.set(0, 0.02, mz);
     g.add(muzzle);
-    g.scale.set(spec.s[0], spec.s[1], spec.s[2]);
+    // uzun silahlar ekrana sığsın deyə bir qədər kiçildilir
+    var sc = id === 'sniper' || id === 'awm' || id === 'dmr' ? 0.8 : 1;
+    g.scale.set(sc, sc, sc);
     g.visible = false;
     return { g: g, flash: flash, muzzle: muzzle };
   }
@@ -801,7 +1056,7 @@
   var flashUntil = 0;
 
   /* ======================= Digər oyunçular (əsgər modeli) ======================= */
-  var remotes = new Map();
+  var remotes = new Map(), bossHp = 0, bossMax = 1;
   var AV = {
     leg: new THREE.BoxGeometry(0.24, 0.66, 0.28),
     boot: new THREE.BoxGeometry(0.26, 0.14, 0.36),
@@ -816,15 +1071,20 @@
     gunBody: new THREE.BoxGeometry(0.07, 0.1, 0.55),
     gunBarrel: new THREE.BoxGeometry(0.03, 0.03, 0.4)
   };
+  AV.pack = new THREE.BoxGeometry(0.4, 0.46, 0.2);
+  AV.pouch = new THREE.BoxGeometry(0.1, 0.12, 0.06);
+  AV.pad = new THREE.BoxGeometry(0.15, 0.1, 0.15);
+  AV.strap = new THREE.BoxGeometry(0.28, 0.05, 0.28);
+  AV.mag = new THREE.BoxGeometry(0.05, 0.14, 0.07);
   var AVM = {
-    pants: new THREE.MeshLambertMaterial({ color: 0x3d4a35 }),
-    boots: new THREE.MeshLambertMaterial({ color: 0x1b1b1d }),
-    shirt: new THREE.MeshLambertMaterial({ color: 0x3a4033 }),
-    gear: new THREE.MeshLambertMaterial({ color: 0x24262a }),
-    skin: new THREE.MeshLambertMaterial({ color: 0xe0b894 }),
-    skinBot: new THREE.MeshLambertMaterial({ color: 0x4a1c1c }),
-    helmet: new THREE.MeshLambertMaterial({ color: 0x3b4632 }),
-    helmetBot: new THREE.MeshLambertMaterial({ color: 0x2a2a2e }),
+    pants: ph(0xffffff, 0x0a0a0a, 4, { map: tCamo }),
+    boots: ph(0x1b1b1d, 0x333333, 30),
+    shirt: ph(0xffffff, 0x0a0a0a, 4, { map: tCamo }),
+    gear: ph(0x24262a, 0x3a3c40, 25),
+    skin: ph(0xe0b894, 0x2a1d14, 10),
+    skinBot: ph(0x4a1c1c, 0x201010, 10),
+    helmet: ph(0x3b4632, 0x606a55, 45),
+    helmetBot: ph(0x2a2a2e, 0x555555, 45),
     visor: new THREE.MeshBasicMaterial({ color: 0x0a0e12 }),
     visorBot: new THREE.MeshBasicMaterial({ color: 0xff2a2a })
   };
@@ -840,7 +1100,7 @@
   function nameOf(id) {
     var r = roster.get(id);
     if (r) return r.name;
-    return id >= 1000 ? 'Bot' : '?';
+    return id >= 1000 ? (mode === 'zombie' ? 'Zombi' : 'Bot') : '?';
   }
   function makeTag(text, color) {
     var c = document.createElement('canvas');
@@ -858,7 +1118,7 @@
   }
   function makeRemote(id, bot) {
     var g = new THREE.Group();
-    var bodyMat = new THREE.MeshLambertMaterial({ color: entityColor(id, bot) });
+    var bodyMat = ph(entityColor(id, bot), 0x1a1a1a, 20);
     var cast = !bot;
     function add(geo, mat, x, y, z, parent) {
       var m = new THREE.Mesh(geo, mat);
@@ -875,6 +1135,11 @@
     g.add(legL); g.add(legR);
     // gövdə
     add(AV.vest, bodyMat, 0, 1.13, 0);
+    if (!bot) {
+      add(AV.pack, AVM.gear, 0, 1.12, 0.28);
+      add(AV.pouch, AVM.gear, -0.15, 1.05, -0.2); add(AV.pouch, AVM.gear, 0.0, 1.05, -0.2); add(AV.pouch, AVM.gear, 0.15, 1.05, -0.2);
+      add(AV.pad, AVM.gear, 0, -0.42, -0.1, legL); add(AV.pad, AVM.gear, 0, -0.42, -0.1, legR);
+    }
     if (!bot) { add(AV.shirt, AVM.shirt, 0, 1.07, 0); add(AV.belt, AVM.gear, 0, 0.82, 0); }
     // baş və qollar (yuxarı-aşağı baxışla birgə fırlanır)
     var aim = new THREE.Group();
@@ -902,7 +1167,106 @@
     refreshLook(r);
     return r;
   }
+  /* ---- zombi modelləri ---- */
+  var tZomb = canvasTex(128, function (g, s) {
+    var r = rng(77);
+    g.fillStyle = '#5c6f4c'; g.fillRect(0, 0, s, s);
+    dots(g, s, 900, 0.22, r, false);
+    for (var i = 0; i < 16; i++) {
+      g.fillStyle = 'rgba(' + (90 + (r() * 40) | 0) + ',10,10,' + (0.3 + r() * 0.4) + ')';
+      g.beginPath(); g.ellipse(r() * s, r() * s, 3 + r() * 10, 2 + r() * 8, r() * 3, 0, 6.3); g.fill();
+    }
+    g.strokeStyle = 'rgba(20,25,15,.5)'; g.lineWidth = 2;
+    for (var j = 0; j < 6; j++) { g.beginPath(); g.moveTo(r() * s, r() * s); g.lineTo(r() * s, r() * s); g.stroke(); }
+  });
+  var tRags = canvasTex(128, function (g, s) {
+    var r = rng(78);
+    g.fillStyle = '#3b3a30'; g.fillRect(0, 0, s, s);
+    dots(g, s, 700, 0.25, r, false);
+    for (var i = 0; i < 10; i++) {
+      g.fillStyle = 'rgba(' + (80 + (r() * 40) | 0) + ',8,8,' + (0.35 + r() * 0.4) + ')';
+      g.beginPath(); g.ellipse(r() * s, r() * s, 4 + r() * 12, 3 + r() * 9, r() * 3, 0, 6.3); g.fill();
+    }
+    for (var k = 0; k < 7; k++) { g.fillStyle = 'rgba(0,0,0,.45)'; g.fillRect(r() * s, r() * s, 2 + r() * 3, 8 + r() * 20); }
+  });
+  var ZM = {
+    skin: ph(0xffffff, 0x151a10, 8, { map: tZomb }),
+    rags: ph(0xffffff, 0x0a0a0a, 4, { map: tRags }),
+    pants: ph(0x2c313b, 0x0a0a0a, 4),
+    eye: new THREE.MeshBasicMaterial({ color: 0xffe93a }),
+    eyeBoss: new THREE.MeshBasicMaterial({ color: 0xff2a1a }),
+    sack: new THREE.MeshPhongMaterial({ color: 0x7bd62f, emissive: 0x2a5a10, specular: 0xffffff, shininess: 60 }),
+    boss: ph(0x6b4a3a, 0x201510, 10, { map: tZomb }),
+    bone: ph(0xd8d2bc, 0x444444, 20)
+  };
+  var ZG = {
+    leg: new THREE.BoxGeometry(0.22, 0.7, 0.26), torso: new THREE.BoxGeometry(0.5, 0.66, 0.3),
+    head: new THREE.BoxGeometry(0.27, 0.3, 0.28), jaw: new THREE.BoxGeometry(0.22, 0.07, 0.2),
+    arm: new THREE.BoxGeometry(0.12, 0.12, 0.62), eye: new THREE.BoxGeometry(0.05, 0.03, 0.02),
+    sack: new THREE.SphereGeometry(0.2, 10, 8), spike: new THREE.ConeGeometry(0.06, 0.3, 6)
+  };
+  // type: 0 adi, 1 qaçan, 2 tank, 3 tüpürən, 4 boss
+  function makeZombie(id, zt) {
+    var g = new THREE.Group(), zi = new THREE.Group();
+    g.add(zi);
+    var scale = [1, 0.94, 1.3, 1, 1.75][zt] || 1;
+    var wide = zt === 2 ? 1.35 : zt === 4 ? 1.25 : 1;
+    zi.scale.set(scale * wide, scale, scale * wide);
+    var skin = zt === 4 ? ZM.boss : ZM.skin;
+    var cast = zt === 4;
+    function add(geo, mat, x, y, z, parent) {
+      var m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = cast; (parent || zi).add(m); return m;
+    }
+    var legL = new THREE.Group(), legR = new THREE.Group();
+    legL.position.set(-0.15, 0.78, 0); legR.position.set(0.15, 0.78, 0);
+    add(ZG.leg, ZM.pants, 0, -0.35, 0, legL); add(ZG.leg, ZM.pants, 0, -0.35, 0, legR);
+    zi.add(legL); zi.add(legR);
+    var torso = add(ZG.torso, ZM.rags, 0, 1.12, 0);
+    if (zt === 1) torso.rotation.x = -0.22; // qaçan: irəli əyilib
+    var aim = new THREE.Group(); aim.position.set(0, 1.42, 0); zi.add(aim);
+    var head = new THREE.Group(); head.position.set(0, 0.2, -0.02); head.rotation.x = 0.18; aim.add(head);
+    add(ZG.head, skin, 0, 0, 0, head);
+    var jaw = add(ZG.jaw, skin, 0, -0.2, -0.02, head);
+    var ey = zt === 4 ? ZM.eyeBoss : ZM.eye;
+    add(ZG.eye, ey, -0.07, 0.03, -0.145, head); add(ZG.eye, ey, 0.07, 0.03, -0.145, head);
+    var arms = new THREE.Group(); arms.position.set(0, -0.12, 0); aim.add(arms);
+    var aL = add(ZG.arm, skin, -0.3, 0.0, -0.3, arms), aR = add(ZG.arm, skin, 0.3, 0.0, -0.3, arms);
+    aL.rotation.x = 0.1; aR.rotation.x = 0.1;
+    if (zt === 2) { add(ZG.torso, ZM.rags, 0, 1.18, 0.0).scale.set(1.15, 0.9, 1.2); }
+    if (zt === 3) { var sk = add(ZG.sack, ZM.sack, 0, 1.12, -0.2); sk.scale.set(1, 1.2, 1); add(ZG.sack, ZM.sack, 0.1, 1.5, 0.05).scale.setScalar(0.5); }
+    if (zt === 4) {
+      for (var k = 0; k < 5; k++) { var sp = add(ZG.spike, ZM.bone, (k - 2) * 0.12, 1.5 + (k % 2) * 0.05, 0.2); sp.rotation.x = -0.5; }
+      add(ZG.spike, ZM.bone, -0.2, 1.88, 0).rotation.z = 0.5; add(ZG.spike, ZM.bone, 0.2, 1.88, 0).rotation.z = -0.5;
+    }
+    scene.add(g);
+    var r = {
+      id: id, bot: true, zt: zt, group: g, bodyMat: { dispose: function () {}, color: { copy: function () {} } }, aim: aim, legL: legL, legR: legR, gun: new THREE.Group(), helmet: new THREE.Group(),
+      arms: arms, head: head, jaw: jaw, tag: null, tagKey: '', buf: [], alive: true, diedAt: 0, dyingUntil: 0, seen: 0, walkT: Math.random() * 6, lx: 0, lz: 0, hp: 100,
+      crouch: false, cr: 0, hm: 0, wi: RIFLE, biteAt: 0, nextGroan: performance.now() + 500 + Math.random() * 3000
+    };
+    return r;
+  }
+  var lastGroan = 0;
+  function zombieAnim(r, now, speed) {
+    var w = r.walkT;
+    r.group.rotation.z = Math.sin(w * 0.5) * (r.zt === 1 ? 0.04 : 0.07);
+    r.head.rotation.z = Math.sin(w * 0.37) * 0.16;
+    var lunge = clamp(1 - (now - r.biteAt) / 280, 0, 1);
+    r.arms.rotation.x = Math.sin(w * 0.6) * 0.07 - lunge * 0.45;
+    r.arms.position.z = -lunge * 0.22;
+    r.jaw.position.y = -0.2 - lunge * 0.06 - Math.abs(Math.sin(w * 0.3)) * 0.015;
+    if (r.alive && now > r.nextGroan) {
+      var d = Math.hypot(r.group.position.x - camera.position.x, r.group.position.z - camera.position.z);
+      r.nextGroan = now + 2500 + Math.random() * 4500;
+      if (d < 28 && now - lastGroan > 350) {
+        lastGroan = now;
+        var base = r.zt === 4 ? 38 : r.zt === 2 ? 52 : r.zt === 1 ? 110 : 70 + Math.random() * 25;
+        tone(base, r.zt === 4 ? 1.1 : 0.6, clamp(1 - d / 28, 0, 1) * (r.zt === 4 ? 0.4 : 0.2), 'sawtooth');
+      }
+    }
+  }
   function refreshLook(r) {
+    if (r.zt != null) return;
     r.bodyMat.color.copy(entityColor(r.id, r.bot));
     var name = r.bot ? 'Bot' : nameOf(r.id);
     var col = '#ffffff';
@@ -953,6 +1317,7 @@
     r.gun.visible = r.armed !== false;
     r.helmet.visible = r.bot || r.hm > 0;
     if (r.tag) r.tag.scale.set(1.6, 0.4 / r.group.scale.y, 1);
+    if (r.zt != null) zombieAnim(r, now, speed);
     if (!r.alive) {
       var p = clamp((now - r.diedAt) / 350, 0, 1);
       r.group.rotation.x = p * Math.PI / 2;
@@ -972,10 +1337,11 @@
   var mTracer = new THREE.MeshBasicMaterial({ color: 0xffe9a0, transparent: true, opacity: 0.9 });
   var mSpark = new THREE.MeshBasicMaterial({ color: 0xffb347 });
   var puffTex = softTex('rgba(210,200,185,.9)', 'rgba(210,200,185,0)');
-  function tracer(a, b, now) {
+  var mAcid = new THREE.MeshBasicMaterial({ color: 0x8cff3a, transparent: true, opacity: 0.9 });
+  function tracer(a, b, now, acid) {
     var d = a.distanceTo(b);
     if (d < 0.5 || fx.length > 220) return;
-    var m = new THREE.Mesh(gTracer, mTracer);
+    var m = new THREE.Mesh(gTracer, acid ? mAcid : mTracer);
     m.position.copy(a).lerp(b, 0.5);
     m.lookAt(b);
     m.scale.set(0.03, 0.03, d);
@@ -1096,6 +1462,9 @@
     if (mode === 'tdm') {
       setHTML('scoreline', '<span class="r">QIRMIZI ' + (meta.r | 0) + '</span> &nbsp;·&nbsp; <span class="b">' + (meta.b | 0) + ' MAVİ</span>');
       setText('subline', 'Komandan: ' + (TEAM_NAMES[myTeam] || '') + ' · hədəf 30');
+    } else if (mode === 'zombie') {
+      setText('scoreline', 'MƏRHƏLƏ ' + (meta.wv | 0) + ' / 10');
+      setText('subline', meta.bots > 0 ? 'Qalan zombilər: ' + meta.bots : meta.wv >= 10 ? 'Son zombi!' : 'Növbəti mərhələ hazırlaşır, silah axtar');
     } else if (mode === 'coop') {
       setText('scoreline', 'DALĞA ' + meta.wv);
       setText('subline', meta.bots > 0 ? 'Qalan botlar: ' + meta.bots : 'Növbəti dalğa gəlir');
@@ -1536,6 +1905,7 @@
 
   var handlers = {
     welcome: function (m) {
+      if (m.ver !== S.VERSION) showMsg('FAYL UYĞUNSUZLUĞU', 'Server və oyun faylları fərqli versiyadır. GitHub-da bütün 5 faylı yeniləyin, Render deploy bitəndən sonra Ctrl+F5 basın.', 60000);
       if (m.map && m.map !== curMapId) buildWorld(m.map);
       clearLoot();
       clearCars();
@@ -1585,7 +1955,7 @@
     snap: function (m) {
       var now = performance.now();
       meta = m.m;
-      var seen = {};
+      var seen = {}, bossSeen = false;
       for (var i = 0; i < m.p.length; i++) {
         var e = m.p[i], id = e[0];
         if (id === me.id) {
@@ -1595,7 +1965,8 @@
         var bot = !!(e[8] & 2), alive = !!(e[8] & 1);
         seen[id] = true;
         var r = remotes.get(id);
-        if (!r) { r = makeRemote(id, bot); remotes.set(id, r); }
+        if (!r) { r = e[11] != null ? makeZombie(id, e[11]) : makeRemote(id, bot); remotes.set(id, r); }
+        if (e[11] === 4 && alive) { bossHp = e[6]; bossMax = e[12] || 1; bossSeen = true; }
         r.seen = now;
         if (r.alive && !alive) r.diedAt = now;
         if (!r.alive && alive) r.diedAt = 0;
@@ -1611,6 +1982,8 @@
       remotes.forEach(function (r) {
         if (!seen[r.id] && now > r.dyingUntil) removeRemote(r);
       });
+      var bb = $('bossbar');
+      if (bb) { bb.hidden = !bossSeen; if (bossSeen) $('bossfill').style.width = Math.max(0, Math.min(100, bossHp / bossMax * 100)) + '%'; }
       syncNades(m.g || []);
       if (m.c) syncCars(m.c);
       updateScoreline();
@@ -1630,13 +2003,14 @@
             r.group.position.z - Math.cos(r.group.rotation.y) * 0.6);
         }
         var dist = o.distanceTo(camera.position);
-        shotSound(wid, clamp(1 - dist / (m.s ? 25 : 70), 0, 1) * (m.s ? 0.2 : 0.5));
-        if (!m.s) spark(start, now, 1.4);
+        if (m.acid) tone(300, 0.25, clamp(1 - dist / 40, 0, 1) * 0.15, 'sawtooth');
+        else shotSound(wid, clamp(1 - dist / (m.s ? 25 : 70), 0, 1) * (m.s ? 0.2 : 0.5));
+        if (!m.s && !m.acid) spark(start, now, 1.4);
       }
-      if (!m.s && !(m.id === me.id && me.su)) { flashLight.position.copy(start); flashLightUntil = now + 55; }
+      if (!m.s && !m.acid && !(m.id === me.id && me.su)) { flashLight.position.copy(start); flashLightUntil = now + 55; }
       for (var i = 0; i < m.e.length; i++) {
         var end = new THREE.Vector3(m.e[i][0], m.e[i][1], m.e[i][2]);
-        tracer(start, end, now);
+        tracer(start, end, now, m.acid);
         spark(end, now, 0.8);
         if (end.y < 3.5 && Math.abs(end.x) < 32 && Math.abs(end.z) < 32) puff(end, now);
       }
@@ -1657,7 +2031,7 @@
       tone(110, 0.18, 0.3, 'sawtooth');
     },
     kill: function (m) {
-      var wname = (W[m.w] && W[m.w].name) || (m.w === 'grenade' ? 'Qumbara' : m.w === 'car' ? 'Maşın' : '');
+      var wname = (W[m.w] && W[m.w].name) || (m.w === 'grenade' ? 'Qumbara' : m.w === 'car' ? 'Maşın' : m.w === 'zombie' ? 'Dişlədi' : '');
       var text = nameOf(m.k) + '  [' + wname + (m.head ? ' ◎' : '') + ']  ' + nameOf(m.v);
       addFeed(text, (m.k === me.id || m.v === me.id) ? 'me' : '');
       var r = remotes.get(m.v);
@@ -1671,14 +2045,20 @@
         me.fireHeld = false; me.ads = false;
         document.body.classList.remove('ads', 'scoped');
         car.id = 0;
-        if (!ended) showMsg('Öldün', mode === 'coop' ? 'Növbəti dalğada canlanacaqsan' : 'Tezliklə canlanacaqsan');
+        if (!ended) showMsg('Öldün', (mode === 'coop' || mode === 'zombie') ? 'Növbəti dalğada canlanacaqsan' : 'Tezliklə canlanacaqsan');
         setTimeout(openLoadout, 1300);
       }
     },
     wave: function (m) {
-      showMsg('Dalğa ' + m.n, m.bots + ' bot gəlir', 3000);
-      tone(220, 0.4, 0.25, 'sawtooth');
+      if (m.z) {
+        showMsg('MƏRHƏLƏ ' + m.n + ' / ' + (m.max || 10), m.boss ? 'DİQQƏT: BOSS gəlir! · ' + m.bots + ' zombi' : m.bots + ' zombi gəlir', 4000);
+        tone(70, 1.0, 0.35, 'sawtooth'); setTimeout(function () { tone(55, 1.2, 0.3, 'sawtooth'); }, 400);
+      } else {
+        showMsg('Dalğa ' + m.n, m.bots + ' bot gəlir', 3000);
+        tone(220, 0.4, 0.25, 'sawtooth');
+      }
     },
+    zhit: function (m) { var r = remotes.get(m.id); if (r) r.biteAt = performance.now(); },
     loot: function (m) { if (m.a) addLoot(m.id, m.ty, m.x, m.z); else removeLoot(m.id); },
     lootall: function (m) { clearLoot(); m.loot.forEach(function (l) { addLoot(l[0], l[1], l[2], l[3]); }); },
     pick: function (m) {
@@ -1748,8 +2128,8 @@
   }, 50);
 
   $('mode').addEventListener('change', function () {
-    var coop = $('mode').value === 'coop';
-    if (coop) $('map').value = 'arena';
+    var mv = $('mode').value, coop = mv === 'coop' || mv === 'zombie';
+    if (mv === 'coop') $('map').value = 'arena';
     $('map').disabled = coop;
   });
 
@@ -1816,8 +2196,8 @@
     send({ t: 'loadout', side: lo.side, p1: lo.main[0], p2: lo.main[1] });
     try { localStorage.setItem(LO_KEY, JSON.stringify(lo)); } catch (e) {}
     closeLoadout();
-    goFullscreen();
     lockPointer();
+    goFullscreen();
     if (!me.alive) showMsg('Hazırsan', 'Doğulmaq üçün gözləyin...', 1500);
     updatePause();
   });
@@ -1866,7 +2246,7 @@
     $('pause').hidden = IS_TOUCH || !(joined && !locked() && $('dc').hidden && !chatting() && $('loadout').hidden);
   }
   document.addEventListener('pointerlockchange', updatePause);
-  $('pause').addEventListener('click', function () { audio(); goFullscreen(); lockPointer(); });
+  $('pause').addEventListener('click', function () { audio(); lockPointer(); goFullscreen(); });
 
   document.addEventListener('mousemove', function (e) {
     if (!joined || !locked()) return;
@@ -2023,7 +2403,13 @@
   }
 
   /* ======================= Əsas dövr ======================= */
-  var last = performance.now(), bobT = 0, curFov = BASE_FOV;
+  var last = performance.now(), bobT = 0, curFov = BASE_FOV, errSeen = {};
+  // bir alt-sistem xəta versə də oyun donmasın: xəta ekranda göstərilir, qalanı işləməyə davam edir
+  function guard(name, fn) {
+    try { fn(); } catch (e) {
+      if (!errSeen[name]) { errSeen[name] = 1; try { console.error(name, e); if (window.__showErr) window.__showErr(name + ': ' + (e && e.message) + ' ' + String(e && e.stack || '').split('\n')[1]); } catch (e2) {} }
+    }
+  }
   function frame(now) {
     requestAnimationFrame(frame);
     var dt = Math.min(0.05, (now - last) / 1000);
@@ -2032,9 +2418,9 @@
 
     if (joined) {
       if (me.alive) {
-        if (car.id) driveCar(dt); else move(dt);
+        guard('move', function () { if (car.id) driveCar(dt); else move(dt); });
         if (me.reloading && now >= me.reloadEnd) { me.reloading = false; me.ammo[me.wi] = W[ORDER[me.wi]].mag; }
-        if (me.fireHeld) tryFire(now);
+        if (me.fireHeld) guard('fire', function () { tryFire(now); });
       }
       var w = W[ORDER[me.wi]];
       if (me.ads && !me.own[me.wi]) { me.ads = false; document.body.classList.remove('ads'); }
@@ -2083,14 +2469,14 @@
 
       // digər oyunçular
       var rt = now - 100;
-      remotes.forEach(function (r) { updateRemote(r, rt, dt, now); });
-      updateFx(now);
-      updateLoot(now, dt);
-      updateNadeMeshes();
-      updateCars(dt);
-      engineUpdate();
-      updateEffects2(now);
-      updateHUD();
+      guard('remote', function () { remotes.forEach(function (r) { updateRemote(r, rt, dt, now); }); });
+      guard('fx', function () { updateFx(now); });
+      guard('loot', function () { updateLoot(now, dt); });
+      guard('nade', updateNadeMeshes);
+      guard('cars', function () { updateCars(dt); });
+      guard('engine', engineUpdate);
+      guard('fx2', function () { updateEffects2(now); });
+      guard('hud', updateHUD);
     } else {
       // lobbi arxa planı: arenanın üstündə dönən kamera
       var a = now * 0.00007;
@@ -2109,12 +2495,14 @@
     skyGroup.position.copy(camera.position);
     cloudGroup.rotation.y += dt * 0.002;
 
-    renderer.clear();
-    renderer.render(scene, camera);
-    if (drawVM) {
-      renderer.clearDepth();
-      renderer.render(vmScene, vmCamera);
-    }
+    guard('render', function () {
+      renderer.clear();
+      renderer.render(scene, camera);
+      if (drawVM) {
+        renderer.clearDepth();
+        renderer.render(vmScene, vmCamera);
+      }
+    });
   }
 
   function resize() {
